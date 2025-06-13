@@ -1,0 +1,19 @@
+{% extends "scoring_app/base.html" %}
+{% load i18n %}
+{% block content %}
+  <h2 style="color: teal;">🎯 {% trans "Train" %} </h2>
+  <ul class="list-group">
+    {% for task in tasks %}
+      <li class="list-group-item">
+        <div class="d-flex me-2">
+            <span id="{{ task.id }}" class="d-inline-block rounded-circle {% if task.status == task.STATUS_RUNNING %}bg-success{% elif task.status == task.STATUS_ENQUEUED %}bg-warning{% endif %} me-2" style="width:12px; height:12px;" role="status" aria-hidden="true"></span>
+          <p class="me-2"> {{ task.actor_name }}</p>
+          <p class="me-2"> {{ task.created_at }}</p>
+          <p class="me-2"> {{ task.status }}</p>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  <button id="launch" class="btn btn-primary m-3"> Launch</button>
+  <div id="progress" data-url="{% url 'ml_app:scoring_app:train' %}"></div>
+{% endblock %}

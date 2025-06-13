@@ -1,0 +1,7 @@
+{% extends "scoring_app/base.html" %}
+{% load i18n %}
+{% block content %}
+  <h2 style="color: teal;">🎯 {% trans "Analyse des données" %} </h2>
+{#  <img src="data:image/png;base64,{{ img_plot }}" alt="Graphique target(age)"/>#}
+  <iframe src="{{ notebook }}" width="100%" height="700" frameborder="0"></iframe>
+{% endblock %}

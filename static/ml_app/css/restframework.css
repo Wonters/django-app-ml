@@ -1,0 +1,72 @@
+:root{
+    --well-bg-color:rgba(187, 194, 204, 0.55);
+}
+
+body {
+    background: #b7c1c9;
+    font-family: "Fira Code", monospace;
+}
+
+.navbar {
+    background-color: #1f2937 !important;
+    color: white;
+}
+.navbar-nav{
+    margin-bottom: 5px;
+}
+
+.prettyprint {
+    background-color: var(--well-bg-color) !important;
+}
+.btn{
+    margin-left: 5px;
+}
+
+.well{
+    background-color: var(--well-bg-color) !important;
+}
+
+h3{
+    color: #f5f5f5;
+}
+
+.list-group-item{
+    margin-bottom: 3px;
+}
+.d-flex{
+    display: flex !important;
+    align-items: center !important;
+}
+
+.d-inline-block {
+  display: inline-block !important;
+}
+.rounded-circle {
+  border-radius: 50% !important;
+}
+.me-2{
+    margin-left: 2px;
+    margin-right: 2px;
+    margin-bottom: 0px!important;
+}
+.bg-success{
+    background-color: green;
+}
+.bg-warning{
+    background-color: orange;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 0.25rem solid #f3f3f3;
+  border-top: 0.25rem solid #2b936b; /* Couleur de la rotation */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
