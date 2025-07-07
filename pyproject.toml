@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-ml-app"
+version = "0.1.0"
+description = "A Django application for machine learning functionality"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Framework :: Django :: 3.2",
+    "Framework :: Django :: 4.0",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "Django>=3.2,<5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Wonters/django-ml-app"
+Documentation = "https://github.com/Wonters/django-ml-app#readme"
+Repository = "https://github.com/Wonters/django-ml-app.git"
+"Bug Tracker" = "https://github.com/Wonters/django-ml-app/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ml_app"] 
