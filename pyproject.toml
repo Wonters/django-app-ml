@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" }
+    { name = "Wonters", email = "shift.python.software@gmail.com" }
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -27,9 +27,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
-dependencies = [
-    "Django>=3.2,<5.0",
-]
+dynamic = ["dependencies"]
 
 [project.urls]
 Homepage = "https://github.com/Wonters/django-ml-app"
@@ -37,5 +35,13 @@ Documentation = "https://github.com/Wonters/django-ml-app#readme"
 Repository = "https://github.com/Wonters/django-ml-app.git"
 "Bug Tracker" = "https://github.com/Wonters/django-ml-app/issues"
 
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
 [tool.hatch.build.targets.wheel]
-packages = ["ml_app"] 
+packages = ["django_app_ml"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["django_app_ml"]
+exclude = ["tests*", "migrations*"]

@@ -1,0 +1,222 @@
+{% extends "django_app_ml/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% trans "Détails du Modèle" %} - {{ model.name }}{% endblock %}
+
+{% block container %}
+<div class="container">
+    {% if error %}
+        <div class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> {{ error }}
+        </div>
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>
+                        <i class="fas fa-brain"></i> 
+                        {% trans "Détails du Modèle" %}: {{ model.name }}
+                    </h1>
+                    <div>
+                        <a href="{% url 'django_app_ml:dataset-analysis' dataset_id=model.dataset.id %}" class="btn btn-secondary me-2">
+                            <i class="fas fa-arrow-left"></i> {% trans "Retour au dataset" %}
+                        </a>
+                        <a href="{% url 'django_app_ml:main' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-home"></i> {% trans "Accueil" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informations du modèle -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-info-circle"></i> {% trans "Informations du modèle" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">{% trans "Nom" %}:</dt>
+                            <dd class="col-sm-9">{{ model.name }}</dd>
+                            
+                            <dt class="col-sm-3">{% trans "Description" %}:</dt>
+                            <dd class="col-sm-9">{{ model.description|default:"Aucune description" }}</dd>
+                            
+                            <dt class="col-sm-3">{% trans "Dataset associé" %}:</dt>
+                            <dd class="col-sm-9">
+                                <a href="{% url 'django_app_ml:dataset-analysis' dataset_id=model.dataset.id %}" class="text-primary">
+                                    <i class="fas fa-database"></i> {{ model.dataset.name }}
+                                </a>
+                            </dd>
+                            
+                            <dt class="col-sm-3">{% trans "Version" %}:</dt>
+                            <dd class="col-sm-9">
+                                <span class="badge bg-info">{{ model_metrics.version }}</span>
+                            </dd>
+                            
+                            <dt class="col-sm-3">{% trans "Date d'entraînement" %}:</dt>
+                            <dd class="col-sm-9">{{ model_metrics.training_date }}</dd>
+                            
+                            <dt class="col-sm-3">{% trans "Dernière mise à jour" %}:</dt>
+                            <dd class="col-sm-9">{{ model_metrics.last_updated }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-chart-line"></i> {% trans "Métriques de performance" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6 mb-3">
+                                <div class="metric-card bg-primary text-white rounded p-3">
+                                    <h4 class="mb-1">{{ model_metrics.accuracy|floatformat:3 }}</h4>
+                                    <small>{% trans "Précision" %}</small>
+                                </div>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="metric-card bg-success text-white rounded p-3">
+                                    <h4 class="mb-1">{{ model_metrics.f1_score|floatformat:3 }}</h4>
+                                    <small>F1-Score</small>
+                                </div>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="metric-card bg-warning text-white rounded p-3">
+                                    <h4 class="mb-1">{{ model_metrics.precision|floatformat:3 }}</h4>
+                                    <small>{% trans "Précision" %}</small>
+                                </div>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="metric-card bg-info text-white rounded p-3">
+                                    <h4 class="mb-1">{{ model_metrics.recall|floatformat:3 }}</h4>
+                                    <small>{% trans "Rappel" %}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions et outils -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-tools"></i> {% trans "Actions et outils" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <a href="{% url 'django_app_ml:predict' %}" class="btn btn-primary w-100">
+                                    <i class="fas fa-play"></i> {% trans "Faire une prédiction" %}
+                                </a>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <a href="{% url 'django_app_ml:train' %}" class="btn btn-warning w-100">
+                                    <i class="fas fa-sync-alt"></i> {% trans "Réentraîner le modèle" %}
+                                </a>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <button class="btn btn-info w-100" onclick="exportModel()">
+                                    <i class="fas fa-download"></i> {% trans "Exporter le modèle" %}
+                                </button>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <button class="btn btn-secondary w-100" onclick="showModelHistory()">
+                                    <i class="fas fa-history"></i> {% trans "Historique" %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphiques de performance -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-chart-bar"></i> {% trans "Évolution des performances" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="performance-chart" style="height: 300px;">
+                            <div class="text-center py-5">
+                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                <h6 class="text-muted">{% trans "Graphique en cours de développement" %}</h6>
+                                <p class="text-muted small">
+                                    {% trans "Ce graphique affichera l'évolution des métriques du modèle au fil du temps." %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-chart-pie"></i> {% trans "Répartition des prédictions" %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="prediction-distribution" style="height: 300px;">
+                            <div class="text-center py-5">
+                                <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                                <h6 class="text-muted">{% trans "Graphique en cours de développement" %}</h6>
+                                <p class="text-muted small">
+                                    {% trans "Ce graphique affichera la répartition des prédictions du modèle." %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra-css %}
+<link rel="stylesheet" href="{% static 'bootstrap/dist/css/bootstrap.min.css' %}">
+<style>
+    .metric-card {
+        transition: transform 0.2s;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block extra-js %}
+<script type="module" src="http://localhost:3000/@vite/client"></script>
+<script type="module" src="http://localhost:3000/django-app-ml/static/js/main.js"></script>
+<script src="{% static 'bootstrap/dist/js/bootstrap.bundle.min.js' %}"></script>
+<script>
+function exportModel() {
+    // Fonctionnalité d'export à implémenter
+    alert('{% trans "Fonctionnalité d\'export en cours de développement" %}');
+}
+
+function showModelHistory() {
+    // Fonctionnalité d'historique à implémenter
+    alert('{% trans "Fonctionnalité d\'historique en cours de développement" %}');
+}
+</script>
+{% endblock %} 

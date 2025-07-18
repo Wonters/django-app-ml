@@ -1,0 +1,20 @@
+{% extends "django_app_ml/base.html" %}
+{% load static i18n %}
+{% block container %}
+<div class="container">
+<form method="post" action="{% url 'django_app_ml:dataset-create' %}">
+    {% csrf_token %}
+    {{ form.as_div }}
+    <div class="mt-3">
+        <button type="submit" class="btn btn-primary">{% trans "Créer" %}</button>
+        <a href="{% url 'django_app_ml:main' %}" class="btn btn-secondary">{% trans "Annuler" %}</a>
+    </div>
+</form>
+</div>
+{% endblock %}
+
+
+{% block extra-css %}
+<link rel="stylesheet" href="{% static 'bootstrap/dist/css/bootstrap.min.css' %}">
+{% endblock %}
+

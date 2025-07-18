@@ -2,28 +2,39 @@ from rest_framework.serializers import (ModelSerializer,
                                         Serializer,
                                         HyperlinkedIdentityField,
                                         SerializerMethodField,
+                                        HyperlinkedRelatedField,
                                         )
 from rest_framework.fields import FileField
 from django.urls import reverse
 from django_dramatiq.models import Task
-from .models import Client
+from .models import DataSet, IAModel, Bucket
 
-class ClientSerializer(ModelSerializer):
+class IAModelSerializer(ModelSerializer):
     class Meta:
-        model = Client
+        model = IAModel
         fields = "__all__"
 
-class ClientPredictSerializer(ModelSerializer):
+class BucketSerializer(ModelSerializer):
+    id = HyperlinkedIdentityField(view_name='django_app_ml:bucket-detail', lookup_field="id")
     class Meta:
-        model =Client
-        exclude = ['TARGET']
+        model = Bucket
+        fields = "__all__"
 
-class ClientUploadSerializer(Serializer):
-    file = FileField()
+class DatasetSerializer(ModelSerializer):
+    id = HyperlinkedIdentityField(view_name='django_app_ml:dataset-detail', lookup_field="id")
+    bucket = HyperlinkedRelatedField(
+        view_name='django_app_ml:bucket-detail',
+        lookup_field='id',
+        read_only=True
+    )
+    
+    class Meta:
+        model = DataSet
+        fields = "__all__"
 
 
 class TaskSerializer(ModelSerializer):
-    url = HyperlinkedIdentityField(view_name='ml_app:task-detail', lookup_field="id")
+    url = HyperlinkedIdentityField(view_name='django_app_ml:task-detail', lookup_field="id")
     message = SerializerMethodField()
     class Meta:
         model = Task

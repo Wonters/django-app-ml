@@ -1,145 +1,58 @@
 from django.db import models
+from storages.backends.s3boto3 import S3Boto3Storage
+from django_app_ml.app_settings import app_settings
+
 
 class ParquetBase(models.Model):
-        file = models.FileField(upload_to='parquet')
-        model_link = models.CharField(max_length=50)
-        def str(self):
-                return self.model_link +"-"+ self.file.name
+    file = models.FileField(upload_to="parquet")
+    model_link = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.model_link + "-" + self.file.name
+    
+class Bucket(models.Model):
+    endpoint = models.URLField(default="https://s3.eu-west-3.amazonaws.com")
+    access_key = models.CharField(max_length=50)
+    secret_key = models.CharField(max_length=50)
+    region = models.CharField(max_length=50)
+    bucket_name = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.bucket_name
+    
 
 
-class Client(models.Model):
-        SK_ID_CURR = models.CharField(max_length=255)
-        TARGET = models.CharField(max_length=255)
-        NAME_CONTRACT_TYPE = models.CharField(max_length=255)
-        CODE_GENDER = models.CharField(max_length=255)
-        FLAG_OWN_CAR = models.CharField(max_length=255)
-        FLAG_OWN_REALTY = models.CharField(max_length=255)
-        CNT_CHILDREN = models.CharField(max_length=255)
-        AMT_INCOME_TOTAL = models.CharField(max_length=255)
-        AMT_CREDIT = models.CharField(max_length=255)
-        AMT_ANNUITY = models.CharField(max_length=255)
-        AMT_GOODS_PRICE = models.CharField(max_length=255)
-        NAME_TYPE_SUITE = models.CharField(max_length=255)
-        NAME_INCOME_TYPE = models.CharField(max_length=255)
-        NAME_EDUCATION_TYPE = models.CharField(max_length=255)
-        NAME_FAMILY_STATUS = models.CharField(max_length=255)
-        NAME_HOUSING_TYPE = models.CharField(max_length=255)
-        REGION_POPULATION_RELATIVE = models.CharField(max_length=255)
-        DAYS_BIRTH = models.CharField(max_length=255)
-        DAYS_EMPLOYED = models.CharField(max_length=255)
-        DAYS_REGISTRATION = models.CharField(max_length=255)
-        DAYS_ID_PUBLISH = models.CharField(max_length=255)
-        OWN_CAR_AGE = models.CharField(max_length=255)
-        FLAG_MOBIL = models.CharField(max_length=255)
-        FLAG_EMP_PHONE = models.CharField(max_length=255)
-        FLAG_WORK_PHONE = models.CharField(max_length=255)
-        FLAG_CONT_MOBILE = models.CharField(max_length=255)
-        FLAG_PHONE = models.CharField(max_length=255)
-        FLAG_EMAIL = models.CharField(max_length=255)
-        OCCUPATION_TYPE = models.CharField(max_length=255)
-        CNT_FAM_MEMBERS = models.CharField(max_length=255)
-        REGION_RATING_CLIENT = models.CharField(max_length=255)
-        REGION_RATING_CLIENT_W_CITY = models.CharField(max_length=255)
-        WEEKDAY_APPR_PROCESS_START = models.CharField(max_length=255)
-        HOUR_APPR_PROCESS_START = models.CharField(max_length=255)
-        REG_REGION_NOT_LIVE_REGION = models.CharField(max_length=255)
-        REG_REGION_NOT_WORK_REGION = models.CharField(max_length=255)
-        LIVE_REGION_NOT_WORK_REGION = models.CharField(max_length=255)
-        REG_CITY_NOT_LIVE_CITY = models.CharField(max_length=255)
-        REG_CITY_NOT_WORK_CITY = models.CharField(max_length=255)
-        LIVE_CITY_NOT_WORK_CITY = models.CharField(max_length=255)
-        ORGANIZATION_TYPE = models.CharField(max_length=255)
-        EXT_SOURCE_1 = models.CharField(max_length=255)
-        EXT_SOURCE_2 = models.CharField(max_length=255)
-        EXT_SOURCE_3 = models.CharField(max_length=255)
-        APARTMENTS_AVG = models.CharField(max_length=255)
-        BASEMENTAREA_AVG = models.CharField(max_length=255)
-        YEARS_BEGINEXPLUATATION_AVG = models.CharField(max_length=255)
-        YEARS_BUILD_AVG = models.CharField(max_length=255)
-        COMMONAREA_AVG = models.CharField(max_length=255)
-        ELEVATORS_AVG = models.CharField(max_length=255)
-        ENTRANCES_AVG = models.CharField(max_length=255)
-        FLOORSMAX_AVG = models.CharField(max_length=255)
-        FLOORSMIN_AVG = models.CharField(max_length=255)
-        LANDAREA_AVG = models.CharField(max_length=255)
-        LIVINGAPARTMENTS_AVG = models.CharField(max_length=255)
-        LIVINGAREA_AVG = models.CharField(max_length=255)
-        NONLIVINGAPARTMENTS_AVG = models.CharField(max_length=255)
-        NONLIVINGAREA_AVG = models.CharField(max_length=255)
-        APARTMENTS_MODE = models.CharField(max_length=255)
-        BASEMENTAREA_MODE = models.CharField(max_length=255)
-        YEARS_BEGINEXPLUATATION_MODE = models.CharField(max_length=255)
-        YEARS_BUILD_MODE = models.CharField(max_length=255)
-        COMMONAREA_MODE = models.CharField(max_length=255)
-        ELEVATORS_MODE = models.CharField(max_length=255)
-        ENTRANCES_MODE = models.CharField(max_length=255)
-        FLOORSMAX_MODE = models.CharField(max_length=255)
-        FLOORSMIN_MODE = models.CharField(max_length=255)
-        LANDAREA_MODE = models.CharField(max_length=255)
-        LIVINGAPARTMENTS_MODE = models.CharField(max_length=255)
-        LIVINGAREA_MODE = models.CharField(max_length=255)
-        NONLIVINGAPARTMENTS_MODE = models.CharField(max_length=255)
-        NONLIVINGAREA_MODE = models.CharField(max_length=255)
-        APARTMENTS_MEDI = models.CharField(max_length=255)
-        BASEMENTAREA_MEDI = models.CharField(max_length=255)
-        YEARS_BEGINEXPLUATATION_MEDI = models.CharField(max_length=255)
-        YEARS_BUILD_MEDI = models.CharField(max_length=255)
-        COMMONAREA_MEDI = models.CharField(max_length=255)
-        ELEVATORS_MEDI = models.CharField(max_length=255)
-        ENTRANCES_MEDI = models.CharField(max_length=255)
-        FLOORSMAX_MEDI = models.CharField(max_length=255)
-        FLOORSMIN_MEDI = models.CharField(max_length=255)
-        LANDAREA_MEDI = models.CharField(max_length=255)
-        LIVINGAPARTMENTS_MEDI = models.CharField(max_length=255)
-        LIVINGAREA_MEDI = models.CharField(max_length=255)
-        NONLIVINGAPARTMENTS_MEDI = models.CharField(max_length=255)
-        NONLIVINGAREA_MEDI = models.CharField(max_length=255)
-        FONDKAPREMONT_MODE = models.CharField(max_length=255)
-        HOUSETYPE_MODE = models.CharField(max_length=255)
-        TOTALAREA_MODE = models.CharField(max_length=255)
-        WALLSMATERIAL_MODE = models.CharField(max_length=255)
-        EMERGENCYSTATE_MODE = models.CharField(max_length=255)
-        OBS_30_CNT_SOCIAL_CIRCLE = models.CharField(max_length=255)
-        DEF_30_CNT_SOCIAL_CIRCLE = models.CharField(max_length=255)
-        OBS_60_CNT_SOCIAL_CIRCLE = models.CharField(max_length=255)
-        DEF_60_CNT_SOCIAL_CIRCLE = models.CharField(max_length=255)
-        DAYS_LAST_PHONE_CHANGE = models.CharField(max_length=255)
-        FLAG_DOCUMENT_2 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_3 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_4 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_5 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_6 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_7 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_8 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_9 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_10 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_11 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_12 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_13 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_14 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_15 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_16 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_17 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_18 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_19 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_20 = models.CharField(max_length=255)
-        FLAG_DOCUMENT_21 = models.CharField(max_length=255)
-        AMT_REQ_CREDIT_BUREAU_HOUR = models.CharField(max_length=255)
-        AMT_REQ_CREDIT_BUREAU_DAY = models.CharField(max_length=255)
-        AMT_REQ_CREDIT_BUREAU_WEEK = models.CharField(max_length=255)
-        AMT_REQ_CREDIT_BUREAU_MON = models.CharField(max_length=255)
-        AMT_REQ_CREDIT_BUREAU_QRT = models.CharField(max_length=255)
-        AMT_REQ_CREDIT_BUREAU_YEAR = models.CharField(max_length=255)
+class DataSet(models.Model):
+    link = models.URLField()
+    name = models.CharField(max_length=50)
+    description = models.TextField()
+    version = models.IntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    bucket = models.ForeignKey(Bucket, on_delete=models.CASCADE, related_name="datasets", null=True, blank=True)
 
-        class Meta:
-                indexes = [
-                        models.Index(fields=[
-                                'TARGET',
-                                'SK_ID_CURR',
-                                'EXT_SOURCE_1',
-                                "EXT_SOURCE_2",
-                                "EXT_SOURCE_3"]),
-                ]
+    def __str__(self):
+        return self.name
 
-        def __str__(self):
-            return self.SK_ID_CURR
+
+class IAModel(models.Model):
+    name = models.CharField(max_length=50)
+    description = models.TextField()
+    dataset = models.ForeignKey(
+        DataSet, on_delete=models.CASCADE, related_name="iamodels"
+    )
+
+    def __str__(self):
+        return f"{self.name} - {self.dataset.name}"
+
+
+class MLFlowTemplate(models.Model):
+    name = models.CharField(max_length=50)
+    file = models.FileField(
+        upload_to="mlflow",
+        storage=app_settings.storage,
+    )
+    description = models.TextField()
+
+    def __str__(self):
+        return self.name

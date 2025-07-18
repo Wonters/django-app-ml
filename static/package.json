@@ -1,0 +1,49 @@
+{
+  "name": "django-ml-app-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Django ML App",
+  "type": "module",
+  "author": "shift-python-software",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "axios": "^1.6.0",
+    "chart.js": "^4.4.0",
+    "vue-chartjs": "^5.3.0",
+    "element-plus": "^2.4.0",
+    "@element-plus/icons-vue": "^2.3.0",
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "vite": "^5.0.0",
+    "eslint": "^8.55.0",
+    "eslint-plugin-vue": "^9.19.0",
+    "@vue/eslint-config-prettier": "^8.0.0",
+    "prettier": "^3.1.0",
+    "sass": "^1.69.0",
+    "bootstrap": "^5.3.7",
+    "datatables.net": "^2.3.2",
+    "datatables.net-bs5": "^2.3.2",
+    "datatables.net-responsive": "^3.0.5",
+    "datatables.net-responsive-bs5": "^3.0.5",
+    "jquery": "^3.7.1",
+    "datatables.net-buttons": "^2.4.2",
+    "datatables.net-buttons-bs5": "^2.4.2",
+    "jszip": "^3.10.1",
+    "file-saver": "^2.0.5"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+} 

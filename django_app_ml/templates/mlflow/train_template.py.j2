@@ -1,0 +1,122 @@
+import mlflow
+import mlflow.sklearn
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+import logging
+
+import pandas as pd
+from smart_open import open
+
+# Configuration du logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def train_model():
+    """
+    Script de training MLflow pour le dataset {{ dataset.name }}
+    """
+    
+    # Configuration MLflow
+    mlflow.set_experiment("{{ experiment_name }}")
+    
+    # Paramètres du dataset
+    dataset_id = {{ dataset.id }}
+    dataset_name = "{{ dataset.name }}"
+    dataset_version = "{{ dataset.version }}"
+    dataset_path = "{{ dataset.path }}"
+    dataset_source = "{{ dataset.source }}"
+    target_column = "{{ dataset.target_column }}"
+    
+    logger.info(f"Starting training for dataset: {dataset_name} (ID: {dataset_id})")
+    logger.info(f"Dataset path: {dataset_path}")
+    logger.info(f"Dataset source: {dataset_source}")
+    
+    try:
+        # Chargement des données
+        logger.info("Loading dataset...")
+        if dataset_source == "s3":
+            s3_kwargs = {
+                "endpoint_url": "{{ dataset.bucket.endpoint_url }}",
+                "aws_access_key_id": "{{ dataset.bucket.access_key }}",
+                "aws_secret_access_key": "{{ dataset.bucket.secret_key }}"
+            }
+            with open(dataset_path, 'r', transport_params={"session_kwargs": s3_kwargs}) as s3_file:
+                df = pd.read_parquet(s3_file)
+        else:
+            # Logique pour charger depuis un fichier local
+            df = pd.read_parquet(dataset_path)
+        
+        logger.info(f"Dataset loaded successfully. Shape: {df.shape}")
+        
+        # Préparation des données
+        if target_column != 'none':
+            X = df.drop(columns=[target_column])
+            y = df[target_column]
+        else:
+            # Si pas de colonne cible spécifiée, utiliser la dernière colonne
+            X = df.iloc[:, :-1]
+            y = df.iloc[:, -1]
+        
+        # Split des données
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        logger.info(f"Training set size: {X_train.shape[0]}")
+        logger.info(f"Test set size: {X_test.shape[0]}")
+        
+        # Configuration du modèle
+        model_params = {
+            'n_estimators': 100,
+            'max_depth': 10,
+            'random_state': 42
+        }
+        
+        # Training avec MLflow
+        with mlflow.start_run():
+            logger.info("Starting MLflow run...")
+            
+            # Log des paramètres
+            mlflow.log_params(model_params)
+            mlflow.log_param("dataset_id", dataset_id)
+            mlflow.log_param("dataset_name", dataset_name)
+            mlflow.log_param("dataset_version", dataset_version)
+            
+            # Entraînement du modèle
+            model = RandomForestClassifier(**model_params)
+            model.fit(X_train, y_train)
+            
+            # Prédictions
+            y_pred = model.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
+            
+            # Log des métriques
+            mlflow.log_metric("accuracy", accuracy)
+            
+            # Log du modèle
+            mlflow.sklearn.log_model(model, "model")
+            
+            # Log des données d'exemple
+            mlflow.log_artifact("{{ dataset.name }}_sample.csv")
+            df.head(100).to_csv("{{ dataset.name }}_sample.csv", index=False)
+            
+            logger.info(f"Training completed. Accuracy: {accuracy:.4f}")
+            
+            # Affichage du rapport de classification
+            print("\nClassification Report:")
+            print(classification_report(y_test, y_pred))
+            
+            return model, accuracy
+    
+    except Exception as e:
+        logger.error(f"Error during training: {str(e)}")
+        raise
+
+if __name__ == "__main__":
+    model, accuracy = train_model()
+    print(f"\nTraining completed successfully!")
+    print(f"Final accuracy: {accuracy:.4f}")
+    print(f"Model saved in MLflow experiment: {{ experiment_name }}") 

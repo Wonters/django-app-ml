@@ -1,0 +1,261 @@
+{% extends "django_app_ml/base.html" %}
+{% load static i18n %}
+
+{% block title %}Liste des Datasets{% endblock %}
+
+{% block container %}
+<div class="container">
+    <h1> <i class="fas fa-database" style="color: #007bff;"></i> Liste des Datasets</h1>
+    <a type="button" class="btn btn-primary mb-3" href="{% url 'django_app_ml:dataset-create' %}">
+        <i class="fas fa-plus"></i> Ajouter un Dataset
+    </a>
+
+    <div id="dataset-list">
+        <table class="table table-striped table-bordered dt-responsive nowrap" id="datasetsTable">
+            <thead>
+                <tr>
+                    <th> {% trans "Nom" %}</th>
+                    <th> {% trans "Description" %}</th>
+                    <th> {% trans "Bucket" %}</th>
+                    <th> {% trans "Déployé" %}</th>
+                    <th> {% trans "Actions" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dataset in datasets %}
+                <tr>
+                    <td>{{ dataset.name }}</td>
+                    <td>{{ dataset.description|default:"Aucune description" }}</td>
+                    {% if dataset.bucket %}
+                    <td> <a href="{% url 'django_app_ml:bucket-detail' id=dataset.bucket.id %}">{{ dataset.bucket.bucket_name }}</a></td>
+                    {% else %}
+                    <td> <i class="fas fa-exclamation-triangle text-warning"></i> Aucun bucket</td>
+                    {% endif %}
+                    <td>
+                        {% if dataset.iamodels.exists %}
+                        <span class="badge bg-success">
+                            <i class="fas fa-check-circle"></i> Oui
+                        </span>
+                        {% else %}
+                        <span class="badge bg-warning">
+                            <i class="fas fa-clock"></i> Non
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group" role="group">
+                            <a href="{% url 'django_app_ml:dataset-analysis' dataset_id=dataset.id %}"
+                                class="btn btn-success btn-sm">
+                                <i class="fas fa-chart-line"></i> {% trans "Analyse" %}
+                            </a>
+                            <a href="{% url 'django_app_ml:dataset-detail' dataset.id %}" target="_blank" class="btn btn-info btn-sm">
+                                <i class="fas fa-pencil-alt"></i> {% trans "Modifier" %}
+                            </a>
+                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal"
+                                data-bs-target="#deleteDatasetModal" data-dataset-id="{{ dataset.id }}"
+                                data-dataset-api-url="{% url 'django_app_ml:dataset-detail' dataset.id %}"
+                                data-dataset-name="{{ dataset.name }}">
+                                <i class="fas fa-trash"></i> {% trans "Delete" %}
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Section des modèles d'IA -->
+    <div class="mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2><i class="fas fa-brain"></i> {% trans "Modèles d'Intelligence Artificielle" %}</h2>
+        </div>
+        
+        <div class="row" id="models-list">
+            {% for model in models %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-brain text-primary"></i> {{ model.name }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text text-muted">{{ model.description|default:"Aucune description" }}</p>
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-database"></i> {% trans "Dataset" %}: 
+                                <a href="{% url 'django_app_ml:dataset-analysis' dataset_id=model.dataset.id %}" class="text-decoration-none">
+                                    {{ model.dataset.name }}
+                                </a>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-grid">
+                            <a href="{% url 'django_app_ml:model-detail' pk=model.id %}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-eye"></i> {% trans "Voir détails" %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="text-center py-5">
+                    <i class="fas fa-brain fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">{% trans "Aucun modèle disponible" %}</h5>
+                    <p class="text-muted">
+                        {% trans "Aucun modèle d'intelligence artificielle n'a encore été créé." %}
+                    </p>
+                    <p class="text-muted">
+                        {% trans "Créez d'abord un dataset, puis ajoutez un modèle associé." %}
+                    </p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmation pour la suppression -->
+<div class="modal fade" id="deleteDatasetModal" tabindex="-1" aria-labelledby="deleteDatasetModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteDatasetModalLabel">Confirmer la suppression</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>{% trans "Êtes-vous sûr de vouloir supprimer le dataset" %} "<span id="datasetNameToDelete"></span>"
+                    ?</p>
+                <p class="text-danger"><strong>{% trans "Cette action est irréversible." %}</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="submit" id="deleteDatasetModalButton" class="btn btn-danger">{% trans "Supprimer" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra-css %}
+<link rel="stylesheet" href="{% static 'bootstrap/dist/css/bootstrap.min.css' %}">
+<link rel="stylesheet" href="{% static 'datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}">
+<link rel="stylesheet" href="{% static 'datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    .dt-buttons {
+        margin-bottom: 1rem;
+    }
+    .dt-buttons .btn {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .dt-buttons .btn i {
+        margin-right: 0.25rem;
+    }
+    .dataTables_wrapper .dataTables_filter {
+        margin-bottom: 1rem;
+    }
+    .table-responsive {
+        margin-top: 1rem;
+    }
+    
+    /* Styles pour la pagination Bootstrap */
+    .dataTables_wrapper .dataTables_paginate {
+        margin-top: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate ul {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #dee2e6;
+        background-color: #fff;
+        color: #0d6efd !important;
+        text-decoration: none;
+        border-radius: 0.375rem;
+        transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.5rem;
+        height: 2.5rem;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        background-color: #e9ecef;
+        border-color: #dee2e6;
+        color: #0a58ca !important;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff !important;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+        color: #fff !important;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+        color: #6c757d !important;
+        pointer-events: none;
+        background-color: #fff;
+        border-color: #dee2e6;
+    }
+    
+    /* Styles pour les boutons de pagination */
+    .dataTables_wrapper .dataTables_paginate .paginate_button.previous,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.next {
+        padding: 0.375rem 0.75rem;
+    }
+    
+    /* Alignement des informations de pagination */
+    .dataTables_wrapper .dataTables_info {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    
+    /* Container principal pour aligner tout sur une ligne */
+    .dataTables_wrapper .dataTables_paginate,
+    .dataTables_wrapper .dataTables_info {
+        display: inline-flex;
+        align-items: center;
+    }
+    
+    /* Wrapper pour tout aligner horizontalement */
+    .dataTables_wrapper .bottom {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+</style>
+<!-- <link rel="stylesheet" href="{% static 'ml_app/css/dataset_list.css' %}"> -->
+{% endblock %}
+
+{% block extra-js %}
+<script type="module" src="http://localhost:3000/@vite/client"></script>
+<script type="module" src="http://localhost:3000/django-app-ml/static/js/main.js"></script>
+{% endblock %}

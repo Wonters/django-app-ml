@@ -1,0 +1,26 @@
+{% load static i18n %}
+
+<!DOCTYPE html>
+<html data-bs-theme="light" lang="en-US" dir="ltr">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }}</title>
+    {% block extra-css %}
+    {% endblock %}
+</head>
+
+<body>
+    <div id="root">
+        <div class="mb-4" style="background-color: #007bff; color: white; padding: 10px;">
+            <h1> <i class="fas fa-database" style="color: #007bff;"></i> ML APP - Django Plugin </h1>
+        </div>
+        {% block container %}
+        {% endblock %}
+    </div>
+</body>
+
+{% block extra-js %}
+{% endblock %}
