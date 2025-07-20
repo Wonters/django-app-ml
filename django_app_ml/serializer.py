@@ -3,11 +3,13 @@ from rest_framework.serializers import (ModelSerializer,
                                         HyperlinkedIdentityField,
                                         SerializerMethodField,
                                         HyperlinkedRelatedField,
+                                        CharField,
                                         )
 from rest_framework.fields import FileField
 from django.urls import reverse
 from django_dramatiq.models import Task
 from .models import DataSet, IAModel, Bucket
+from .validators import validate_url_or_s3
 
 class IAModelSerializer(ModelSerializer):
     class Meta:
@@ -27,6 +29,7 @@ class DatasetSerializer(ModelSerializer):
         lookup_field='id',
         read_only=True
     )
+    link = CharField(validators=[validate_url_or_s3])
     
     class Meta:
         model = DataSet

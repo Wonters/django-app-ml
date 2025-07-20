@@ -1,6 +1,5 @@
 from django.test import TestCase, Client
 from django.urls import reverse
-from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django_dramatiq.models import Task
 from rest_framework.test import APITestCase, APIClient
@@ -9,7 +8,8 @@ import json
 import tempfile
 import os
 from unittest.mock import patch, MagicMock
-
+import uuid
+from home.models import User
 from .models import DataSet, IAModel, ParquetBase, MLFlowTemplate
 from .forms import DatasetForm, ModelIAForm
 from .serializer import DatasetSerializer, IAModelSerializer, TaskSerializer
@@ -573,6 +573,295 @@ class DatasetDownloadViewTest(APITestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn('error', response.data)
         self.assertEqual(response.data['error'], 'Dataset non trouvé')
+
+
+class AuditDatasetViewTest(APITestCase):
+    """Tests for AuditDatasetView"""
+    
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        self.client.force_authenticate(user=self.user)
+        
+        self.dataset = DataSet.objects.create(
+            name='Test Dataset',
+            description='Test dataset description',
+            link='s3://datastore-model/Client.parquet'
+        )
+        
+        # Mock audit report data
+        self.mock_audit_report = {
+            "dataset_path": "s3://datastore-model/Client.parquet",
+            "auditor_type": "pandas",
+            "basic_info": {
+                "row_count": 615022,
+                "column_count": 123,
+                "column_names": ["id", "SK_ID_CURR", "TARGET"],
+                "column_types": {
+                    "id": "int64",
+                    "SK_ID_CURR": "object",
+                    "TARGET": "object"
+                }
+            },
+            "data_quality": {
+                "missing_values": {
+                    "id": 0,
+                    "SK_ID_CURR": 0,
+                    "TARGET": 0
+                },
+                "duplicate_rows": 0
+            },
+            "statistical_summary": {
+                "id": {
+                    "count": 615022,
+                    "mean": 307511.5,
+                    "std": 177584.5,
+                    "min": 1,
+                    "max": 615022
+                }
+            }
+        }
+    
+    @patch('django_app_ml.views.audit_dataset_task')
+    def test_audit_dataset_view_post_success(self, mock_audit_task):
+        """Test POST request to launch audit task successfully"""
+        mock_task = MagicMock()
+        mock_task.message_id = 'test-audit-message-id'
+        mock_audit_task.send_with_options.return_value = mock_task
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'pending')
+        self.assertEqual(response.data['message'], 'Audit lancé avec succès')
+        self.assertEqual(response.data['task_id'], 'test-audit-message-id')
+        
+        # Verify task was called with correct parameters
+        mock_audit_task.send_with_options.assert_called_once_with(
+            kwargs={
+                'dataset_path': self.dataset.link,
+                'bucket': None
+            }
+        )
+    
+    def test_audit_dataset_view_post_dataset_not_found(self):
+        """Test POST request with non-existent dataset"""
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': 99999})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data['status'], 'failed')
+        self.assertEqual(response.data['message'], 'Dataset non trouvé')
+        self.assertEqual(response.data['error'], 'Dataset non trouvé')
+        self.assertIsNone(response.data['task_id'])
+    
+    @patch('django_app_ml.views.audit_dataset_task')
+    def test_audit_dataset_view_post_task_exception(self, mock_audit_task):
+        """Test POST request when task raises an exception"""
+        mock_audit_task.send_with_options.side_effect = Exception("Task failed")
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.data['status'], 'failed')
+        self.assertEqual(response.data['message'], 'Erreur lors du lancement de l\'audit')
+        self.assertEqual(response.data['error'], 'Task failed')
+        self.assertIsNone(response.data['task_id'])
+    
+    def test_audit_dataset_view_get_task_pending(self):
+        """Test GET request for pending task status"""
+        # Create a mock task with pending status
+        task = Task.objects.create(
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_ENQUEUED
+        )
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'pending')
+        self.assertEqual(response.data['message'], 'Tâche en attente de traitement')
+        self.assertEqual(response.data['task_id'], str(task.id))
+    
+    def test_audit_dataset_view_get_task_running(self):
+        """Test GET request for running task status"""
+        # Create a mock task with running status
+        task = Task.objects.create(
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_RUNNING
+        )
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'running')
+        self.assertEqual(response.data['message'], 'Tâche en cours d\'exécution')
+        self.assertEqual(response.data['task_id'], str(task.id))
+    
+    @patch('django_app_ml.views.TaskResultManager')
+    def test_audit_dataset_view_get_task_completed_success(self, mock_task_manager):
+        """Test GET request for completed task with successful result"""
+        # Create a mock task with completed status
+        task = Task.tasks.create(
+            id=uuid.uuid4(),
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_DONE
+        )
+        
+        # Mock the task result manager to return successful audit report
+        mock_manager_instance = MagicMock()
+        mock_manager_instance.get_task_result.return_value = self.mock_audit_report
+        mock_task_manager.return_value = mock_manager_instance
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'completed')
+        self.assertEqual(response.data['message'], 'Audit terminé avec succès')
+        self.assertEqual(response.data['task_id'], str(task.id))
+        self.assertEqual(response.data['result'], self.mock_audit_report)
+    
+    @patch('django_app_ml.views.TaskResultManager')
+    def test_audit_dataset_view_get_task_completed_with_error(self, mock_task_manager):
+        """Test GET request for completed task with error in result"""
+        # Create a mock task with completed status
+        task = Task.tasks.create(
+            id=uuid.uuid4(),
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_DONE
+        )
+        
+        # Mock the task result manager to return error result
+        error_result = {
+            'error': 'Dataset access denied',
+            'success': False
+        }
+        mock_manager_instance = MagicMock()
+        mock_manager_instance.get_task_result.return_value = error_result
+        mock_task_manager.return_value = mock_manager_instance
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.data['status'], 'failed')
+        self.assertEqual(response.data['message'], 'Audit terminé avec des erreurs')
+        self.assertEqual(response.data['task_id'], str(task.id))
+        self.assertEqual(response.data['error'], 'Dataset access denied')
+        self.assertEqual(response.data['result'], error_result)
+    
+    @patch('django_app_ml.views.TaskResultManager')
+    def test_audit_dataset_view_get_task_completed_no_result(self, mock_task_manager):
+        """Test GET request for completed task with no result"""
+        # Create a mock task with completed status
+        task = Task.tasks.create(
+            id=uuid.uuid4(),
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_DONE
+        )
+        
+        # Mock the task result manager to return None
+        mock_manager_instance = MagicMock()
+        mock_manager_instance.get_task_result.return_value = None
+        mock_task_manager.return_value = mock_manager_instance
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'completed')
+        self.assertEqual(response.data['message'], 'Audit terminé mais aucun résultat disponible')
+        self.assertEqual(response.data['task_id'], str(task.id))
+        self.assertIn('warning', response.data['result'])
+    
+    def test_audit_dataset_view_get_task_failed(self):
+        """Test GET request for failed task"""
+        # Create a mock task with failed status
+        task = Task.tasks.create(
+            id=uuid.uuid4(),
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_FAILED,
+            error='Connection timeout'
+        )
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.data['status'], 'failed')
+        self.assertEqual(response.data['message'], 'Audit échoué')
+        self.assertEqual(response.data['task_id'], str(task.id))
+        self.assertEqual(response.data['error'], 'Connection timeout')
+    
+    def test_audit_dataset_view_get_task_not_found(self):
+        """Test GET request for non-existent task"""
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': 'non-existent-task-id'})
+        
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data['status'], 'failed')
+        self.assertEqual(response.data['message'], 'Tâche non trouvée')
+        self.assertEqual(response.data['error'], 'Tâche non trouvée')
+        self.assertEqual(response.data['task_id'], 'non-existent-task-id')
+    
+    def test_audit_dataset_view_get_unknown_status(self):
+        """Test GET request for task with unknown status"""
+        # Create a mock task with unknown status
+        task = Task.tasks.create(
+            id=uuid.uuid4(),
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status='UNKNOWN_STATUS'
+        )
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'unknown')
+        self.assertEqual(response.data['message'], 'Statut inconnu: UNKNOWN_STATUS')
+        self.assertEqual(response.data['task_id'], str(task.id))
+    
+    @patch('django_app_ml.views.TaskResultManager')
+    def test_audit_dataset_view_get_task_completed_exception_result(self, mock_task_manager):
+        """Test GET request for completed task with exception as result"""
+        # Create a mock task with completed status
+        task = Task.tasks.create(
+            id=uuid.uuid4(),
+            actor_name='audit_dataset_task',
+            queue_name='audit',
+            status=Task.STATUS_DONE
+        )
+        
+        # Mock the task result manager to return an exception
+        exception_result = Exception("Processing failed")
+        mock_manager_instance = MagicMock()
+        mock_manager_instance.get_task_result.return_value = exception_result
+        mock_task_manager.return_value = mock_manager_instance
+        
+        url = reverse('django_app_ml:audit-dataset', kwargs={'dataset_id': self.dataset.id})
+        response = self.client.get(url, {'task_id': task.id})
+        
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.data['status'], 'failed')
+        self.assertEqual(response.data['message'], 'Audit terminé avec une exception')
+        self.assertEqual(response.data['task_id'], str(task.id))
+        self.assertEqual(response.data['error'], 'Processing failed')
+        self.assertEqual(response.data['result']['exception'], 'Processing failed')
 
 
 class FormTests(TestCase):

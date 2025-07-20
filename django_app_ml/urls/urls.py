@@ -17,6 +17,7 @@ from ..views import (
     BucketModelViewSet,
     TestBucketConnectionView,
     AuditDatasetView,
+    AnalyseIAView,
 )
 from rest_framework.routers import SimpleRouter, DefaultRouter
 
@@ -68,5 +69,10 @@ urlpatterns = [
         "api/datasets/<int:dataset_id>/audit/",
         AuditDatasetView.as_view(),
         name="audit-dataset",
+    ),
+    path(
+        "api/datasets/<int:dataset_id>/analyse-ia/",
+        AnalyseIAView.as_view(),
+        name="analyse-ia",
     ),
 ]

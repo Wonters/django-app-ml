@@ -1,11 +1,32 @@
 
 from typing import Dict, List, Any, Optional, Union
 import json
+import boto3
+import numpy as np
 from pathlib import Path
+from smart_open import open as s_open
+import pandas as pd
 from .logging import get_logger
+from .models import Bucket
 
 logger = get_logger(__name__)
 
+def convert_numpy_types(obj):
+    """
+    Convertit les types numpy en types Python natifs pour la sérialisation JSON
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
 
 # Alternative avec pandas si daft n'est pas disponible
 class PandasDatasetAuditor:
@@ -13,13 +34,31 @@ class PandasDatasetAuditor:
     Alternative à DatasetAuditor utilisant pandas au lieu de daft
     """
     
-    def __init__(self):
+    def __init__(self, bucket: Bucket):
         self.audit_results = {}
-        try:
-            import pandas as pd
-            self.pd = pd
-        except ImportError:
-            raise ImportError("Pandas n'est pas disponible")
+        self.bucket = bucket
+    def open_dataset_from_s3(self, dataset_path: str):
+        """
+        Ouvre un dataset depuis S3
+        """            
+        session = boto3.session.Session(
+            aws_access_key_id=self.bucket.access_key,
+            aws_secret_access_key=self.bucket.secret_key
+        )
+
+        client = session.client("s3", endpoint_url=self.bucket.endpoint)
+
+        # 2. Préparer les paramètres pour smart_open
+        transport_params = {"client": client}
+
+        with s_open(dataset_path, 'rb', transport_params=transport_params) as s3_file:
+            if dataset_path.endswith('.parquet'):
+                df = pd.read_parquet(s3_file)
+            elif dataset_path.endswith('.csv'):
+                df = pd.read_csv(s3_file)
+            else:
+                raise ValueError(f"Format de fichier non supporté: {dataset_path}")
+        return df
     
     def load_dataset(self, dataset_path: str):
         """
@@ -32,10 +71,17 @@ class PandasDatasetAuditor:
             pandas.DataFrame: Dataset chargé
         """
         try:
+            # Si c'est un chemin S3, utiliser open_dataset_from_s3
+            if dataset_path.startswith('s3://'):
+                df = self.open_dataset_from_s3(dataset_path)
+                logger.info(f"Dataset chargé avec succès depuis S3: {dataset_path}")
+                return df
+            
+            # Sinon, charger localement
             if dataset_path.endswith('.parquet'):
-                df = self.pd.read_parquet(dataset_path)
+                df = pd.read_parquet(dataset_path)
             elif dataset_path.endswith('.csv'):
-                df = self.pd.read_csv(dataset_path)
+                df = pd.read_csv(dataset_path)
             else:
                 raise ValueError(f"Format de fichier non supporté: {dataset_path}")
             
@@ -64,7 +110,7 @@ class PandasDatasetAuditor:
                 "memory_usage": df.memory_usage(deep=True).sum()
             }
             
-            return basic_info
+            return convert_numpy_types(basic_info)
         except Exception as e:
             logger.error(f"Erreur lors de l'obtention des informations de base: {e}")
             raise
@@ -81,7 +127,7 @@ class PandasDatasetAuditor:
         """
         try:
             missing_counts = df.isnull().sum().to_dict()
-            return missing_counts
+            return convert_numpy_types(missing_counts)
         except Exception as e:
             logger.error(f"Erreur lors de l'analyse des valeurs manquantes: {e}")
             raise
@@ -113,7 +159,7 @@ class PandasDatasetAuditor:
                         "median": col_stats['50%']
                     }
             
-            return stats
+            return convert_numpy_types(stats)
         except Exception as e:
             logger.error(f"Erreur lors du calcul des statistiques descriptives: {e}")
             raise
@@ -144,7 +190,7 @@ class PandasDatasetAuditor:
                         "top_values": value_counts
                     }
             
-            return stats
+            return convert_numpy_types(stats)
         except Exception as e:
             logger.error(f"Erreur lors de l'analyse des colonnes catégorielles: {e}")
             raise
@@ -183,7 +229,7 @@ class PandasDatasetAuditor:
                     report_path = f"audit_report_pandas_{Path(dataset_path).stem}.json"
                 
                 with open(report_path, 'w', encoding='utf-8') as f:
-                    json.dump(audit_results, f, indent=2, default=str)
+                    json.dump(audit_results, f, indent=2, default=convert_numpy_types)
                 
                 logger.info(f"Rapport d'audit pandas sauvegardé: {report_path}")
             
@@ -193,18 +239,3 @@ class PandasDatasetAuditor:
         except Exception as e:
             logger.error(f"Erreur lors de l'audit complet avec pandas: {e}")
             raise
-
-
-# Fonction utilitaire pour un audit rapide avec pandas
-def quick_audit_pandas(dataset_path: str) -> Dict[str, Any]:
-    """
-    Fonction utilitaire pour un audit rapide d'un dataset avec pandas
-    
-    Args:
-        dataset_path: Chemin vers le dataset
-        
-    Returns:
-        Dict contenant les résultats de l'audit
-    """
-    auditor = PandasDatasetAuditor()
-    return auditor.full_audit(dataset_path, save_report=False) 

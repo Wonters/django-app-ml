@@ -193,7 +193,6 @@
 {% endblock %}
 
 {% block extra-css %}
-<link rel="stylesheet" href="{% static 'bootstrap/dist/css/bootstrap.min.css' %}">
 <style>
     .metric-card {
         transition: transform 0.2s;
@@ -207,7 +206,6 @@
 {% block extra-js %}
 <script type="module" src="http://localhost:3000/@vite/client"></script>
 <script type="module" src="http://localhost:3000/django-app-ml/static/js/main.js"></script>
-<script src="{% static 'bootstrap/dist/js/bootstrap.bundle.min.js' %}"></script>
 <script>
 function exportModel() {
     // Fonctionnalité d'export à implémenter

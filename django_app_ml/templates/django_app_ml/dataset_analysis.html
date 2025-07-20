@@ -43,9 +43,14 @@
                             
                             <dt class="col-sm-4">{% trans "Source" %}:</dt>
                             <dd class="col-sm-8">
-                                <a href="{{ dataset.link }}" target="_blank" class="text-primary">
-                                    <i class="fas fa-external-link-alt"></i> {% trans "Voir la source" %}
-                                </a>
+                                <div class="d-flex justify-content-between">
+                                    <a href="{{ dataset.link }}" target="_blank" class="text-primary">
+                                        <i class="fas fa-external-link-alt"></i> {% trans "Voir la source" %}
+                                    </a>
+                                    <a href="{% url 'django_app_ml:dataset-detail' id=dataset.id %}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-pencil-alt"></i> {% trans "Editer" %}
+                                    </a>
+                                </div>
                             </dd>
                             <dt class="col-sm-4">{% trans "Bucket" %}:</dt>
                             <dd class="col-sm-8">
@@ -146,126 +151,149 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-chart-bar"></i> {% trans "Analyse des données" %}
-                        </h5>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-chart-bar"></i> {% trans "Analyse des données" %}
+                            </h5>
+
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div id="analysis-content">
-                            <div class="text-center py-5">
-                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">{% trans "Analyse en cours de développement" %}</h5>
-                                <p class="text-muted">
-                                    {% trans "Cette fonctionnalité permettra d'afficher des graphiques et statistiques sur les données du dataset." %}
-                                </p>
-                                
-                                <!-- Bouton pour lancer l'audit -->
-                                <div class="mt-4">
-                                    <button 
-                                        id="launch-audit-btn" 
-                                        class="btn btn-primary btn-lg"
-                                        data-dataset-id="{{ dataset.id }}"
-                                        data-audit-url="{% url 'django_app_ml:audit-dataset' dataset_id=dataset.id %}">
-                                        <i class="fas fa-play"></i> {% trans "Lancer l'analyse" %}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Onglets pour les analyses -->
+                        <ul class="nav nav-tabs" id="analysisTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="data-analysis-tab" data-bs-toggle="tab" data-bs-target="#data-analysis-content" type="button" role="tab" aria-controls="data-analysis-content" aria-selected="true">
+                                    <i class="fas fa-chart-line"></i> {% trans "Audit" %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ia-analysis-tab" data-bs-toggle="tab" data-bs-target="#ia-analysis-content" type="button" role="tab" aria-controls="ia-analysis-content" aria-selected="false">
+                                    <i class="fas fa-brain"></i> {% trans "Analyse IA" %}
+                                </button>
+                            </li>
+                        </ul>
                         
-                        <!-- Zone de statut de l'audit -->
-                        <div id="audit-status" class="d-none">
-                            <div class="text-center py-4">
-                                <div id="audit-loading" class="d-none">
-                                    <i class="fas fa-spinner fa-spin fa-3x text-primary mb-3"></i>
-                                    <h5 class="text-primary">{% trans "Analyse en cours..." %}</h5>
-                                    <p class="text-muted">{% trans "Veuillez patienter pendant que nous analysons votre dataset." %}</p>
-                                </div>
-                                
-                                <div id="audit-error" class="d-none">
-                                    <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
-                                    <h5 class="text-danger">{% trans "Erreur lors de l'analyse" %}</h5>
-                                    <p id="audit-error-message" class="text-muted"></p>
-                                    <button id="retry-audit-btn" class="btn btn-outline-primary">
-                                        <i class="fas fa-redo"></i> {% trans "Réessayer" %}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Zone des résultats de l'audit -->
-                        <div id="audit-results" class="d-none">
-                            <div class="row">
-                                <div class="col-12">
-                                    <h6 class="text-success mb-3">
-                                        <i class="fas fa-check-circle"></i> {% trans "Analyse terminée avec succès" %}
-                                    </h6>
-                                </div>
-                            </div>
-                            
-                            <!-- Informations de base -->
-                            <div id="basic-info-section" class="mb-4 d-none">
-                                <h6 class="border-bottom pb-2">{% trans "Informations de base" %}</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <dl class="row">
-                                            <dt class="col-sm-6">{% trans "Nombre de lignes" %}:</dt>
-                                            <dd class="col-sm-6" id="row-count">-</dd>
-                                            
-                                            <dt class="col-sm-6">{% trans "Nombre de colonnes" %}:</dt>
-                                            <dd class="col-sm-6" id="column-count">-</dd>
-                                        </dl>
+                        <!-- Contenu des onglets -->
+                        <div class="tab-content" id="analysisTabsContent">
+                            <!-- Onglet Analyse de données -->
+                            <div class="tab-pane fade show active" id="data-analysis-content" role="tabpanel" aria-labelledby="data-analysis-tab">
+                                <!-- Zone de gestion des boutons d'analyse -->
+                                <div id="handle-analyse">
+                                    <div id="analysis-content">
+                                        <div class="text-center py-5">
+                                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                            <h5 class="text-muted">{% trans "Analyse en cours de développement" %}</h5>
+                                            <p class="text-muted">
+                                                {% trans "Cette fonctionnalité permettra d'afficher des graphiques et statistiques sur les données du dataset." %}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <dl class="row">
-                                            <dt class="col-sm-6">{% trans "Utilisation mémoire" %}:</dt>
-                                            <dd class="col-sm-6" id="memory-usage">-</dd>
-                                        </dl>
+                                    
+                                    <!-- Bouton pour lancer l'audit -->
+                                    <div class="text-center mt-4">
+                                        <button 
+                                            id="launch-audit-btn" 
+                                            class="btn btn-primary btn-lg"
+                                            data-dataset-id="{{ dataset.id }}"
+                                            data-url="{% url 'django_app_ml:audit-dataset' dataset_id=dataset.id %}">
+                                            <i class="fas fa-play"></i> {% trans "Lancer l'analyse" %}
+                                        </button>
+                                        
+                                        <!-- Bouton pour relancer l'audit (caché par défaut) -->
+                                        <button 
+                                            id="relaunch-audit-btn" 
+                                            class="btn btn-outline-primary btn-lg d-none"
+                                            data-dataset-id="{{ dataset.id }}"
+                                            data-url="{% url 'django_app_ml:audit-dataset' dataset_id=dataset.id %}">
+                                            <i class="fas fa-redo"></i> {% trans "Relancer l'analyse" %}
+                                        </button>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <!-- Valeurs manquantes -->
-                            <div id="missing-values-section" class="mb-4 d-none">
-                                <h6 class="border-bottom pb-2">{% trans "Valeurs manquantes" %}</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>{% trans "Colonne" %}</th>
-                                                <th>{% trans "Valeurs manquantes" %}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="missing-values-table">
-                                        </tbody>
-                                    </table>
+                                
+                                <!-- Zone de statut de l'audit -->
+                                <div id="audit-status" class="d-none">
+                                    <div class="text-center py-4">
+                                        <div id="audit-loading" class="d-none">
+                                            <i class="fas fa-spinner fa-spin fa-3x text-primary mb-3"></i>
+                                            <h5 class="text-primary">{% trans "Analyse en cours..." %}</h5>
+                                            <p class="text-muted">{% trans "Veuillez patienter pendant que nous analysons votre dataset." %}</p>
+                                        </div>
+                                        
+                                        <div id="audit-error" class="d-none">
+                                            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                                            <h5 class="text-danger">{% trans "Erreur lors de l'analyse" %}</h5>
+                                            <p id="audit-error-message" class="text-muted"></p>
+                                            <button id="retry-audit-btn" class="btn btn-outline-primary">
+                                                <i class="fas fa-redo"></i> {% trans "Réessayer" %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Zone des résultats de l'audit -->
+                                <div id="audit-results" class="d-none">
+                                    <!-- Le contenu sera généré dynamiquement par JavaScript -->
                                 </div>
                             </div>
                             
-                            <!-- Statistiques descriptives -->
-                            <div id="descriptive-stats-section" class="mb-4 d-none">
-                                <h6 class="border-bottom pb-2">{% trans "Statistiques descriptives" %}</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>{% trans "Colonne" %}</th>
-                                                <th>{% trans "Moyenne" %}</th>
-                                                <th>{% trans "Écart-type" %}</th>
-                                                <th>{% trans "Min" %}</th>
-                                                <th>{% trans "Max" %}</th>
-                                                <th>{% trans "Médiane" %}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="descriptive-stats-table">
-                                        </tbody>
-                                    </table>
+                            <!-- Onglet Analyse IA -->
+                            <div class="tab-pane fade" id="ia-analysis-content" role="tabpanel" aria-labelledby="ia-analysis-tab">
+                                <!-- Zone de gestion des boutons d'analyse IA -->
+                                <div id="handle-ia-analyse">
+                                    <div id="ia-analysis-content">
+                                        <div class="text-center py-5">
+                                            <i class="fas fa-brain fa-3x text-muted mb-3"></i>
+                                            <h5 class="text-muted">{% trans "Analyse IA" %}</h5>
+                                            <p class="text-muted">
+                                                {% trans "Cette fonctionnalité permettra d'analyser votre dataset avec des techniques d'intelligence artificielle avancées." %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Bouton pour lancer l'analyse IA -->
+                                    <div class="text-center mt-4">
+                                        <button 
+                                            id="launch-ia-analysis-tab-btn" 
+                                            class="btn btn-success btn-lg"
+                                            data-dataset-id="{{ dataset.id }}"
+                                            data-url="{% url 'django_app_ml:analyse-ia' dataset_id=dataset.id %}">
+                                            <i class="fas fa-brain"></i> {% trans "Lancer l'analyse IA" %}
+                                        </button>
+                                        
+                                        <!-- Bouton pour relancer l'analyse IA (caché par défaut) -->
+                                        <button 
+                                            id="relaunch-ia-analysis-btn" 
+                                            class="btn btn-outline-success btn-lg d-none"
+                                            data-dataset-id="{{ dataset.id }}"
+                                            data-url="{% url 'django_app_ml:analyse-ia' dataset_id=dataset.id %}">
+                                            <i class="fas fa-redo"></i> {% trans "Relancer l'analyse IA" %}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <!-- Statistiques catégorielles -->
-                            <div id="categorical-stats-section" class="mb-4 d-none">
-                                <h6 class="border-bottom pb-2">{% trans "Statistiques catégorielles" %}</h6>
-                                <div id="categorical-stats-content">
+                                
+                                <!-- Zone de statut de l'analyse IA -->
+                                <div id="ia-analysis-status" class="d-none">
+                                    <div class="text-center py-4">
+                                        <div id="ia-analysis-loading" class="d-none">
+                                            <i class="fas fa-spinner fa-spin fa-3x text-success mb-3"></i>
+                                            <h5 class="text-success">{% trans "Analyse IA en cours..." %}</h5>
+                                            <p class="text-muted">{% trans "Veuillez patienter pendant que nous analysons votre dataset avec l'IA." %}</p>
+                                        </div>
+                                        
+                                        <div id="ia-analysis-error" class="d-none">
+                                            <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                                            <h5 class="text-danger">{% trans "Erreur lors de l'analyse IA" %}</h5>
+                                            <p id="ia-analysis-error-message" class="text-muted"></p>
+                                            <button id="retry-ia-analysis-btn" class="btn btn-outline-success">
+                                                <i class="fas fa-redo"></i> {% trans "Réessayer" %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Zone des résultats de l'analyse IA -->
+                                <div id="ia-analysis-results" class="d-none">
+                                    <!-- Le contenu sera généré dynamiquement par JavaScript -->
                                 </div>
                             </div>
                         </div>
@@ -278,11 +306,9 @@
 {% endblock %}
 
 {% block extra-css %}
-<link rel="stylesheet" href="{% static 'bootstrap/dist/css/bootstrap.min.css' %}">
 {% endblock %}
 
 {% block extra-js %}
 <script type="module" src="http://localhost:3000/@vite/client"></script>
-<script src="{% static 'bootstrap/dist/js/bootstrap.bundle.min.js' %}"></script>
-<script src="{% static 'js/dataset_analysis.js' %}"></script>
+<script type="module" src="{% static 'js/dataset_analysis/main.js' %}"></script>
 {% endblock %} 

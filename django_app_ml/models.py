@@ -1,6 +1,7 @@
 from django.db import models
 from storages.backends.s3boto3 import S3Boto3Storage
 from django_app_ml.app_settings import app_settings
+from django_app_ml.validators import validate_url_or_s3
 
 
 class ParquetBase(models.Model):
@@ -21,9 +22,27 @@ class Bucket(models.Model):
         return self.bucket_name
     
 
+class AuditReport(models.Model):
+    dataset = models.ForeignKey("DataSet", on_delete=models.CASCADE, related_name="reports")
+    report = models.JSONField(default=dict, null=True, blank=True)
+    file = models.FileField(upload_to="reports", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.dataset.name
+    
+class IARecommandation(models.Model):
+    dataset = models.ForeignKey("DataSet", on_delete=models.CASCADE, related_name="recommendations")
+    recommendation = models.JSONField(default=dict, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.dataset.name
 
 class DataSet(models.Model):
-    link = models.URLField()
+    link = models.URLField(validators=[validate_url_or_s3])
     name = models.CharField(max_length=50)
     description = models.TextField()
     version = models.IntegerField(default=1)
