@@ -167,6 +167,20 @@ function pollTaskStatus(taskId, endpoint, element, originalText, taskName = "Tâ
     checkStatus();
 }
 
+// Fonction pour récupérer le statut d'une tâche (utilisée par train.js)
+async function fetchTaskStatus(taskPromise) {
+    try {
+        const result = await taskPromise;
+        if (result && result.status) {
+            return result.status;
+        }
+        return "Unknown";
+    } catch (error) {
+        console.error('Erreur lors de la récupération du statut de la tâche:', error);
+        return "Error";
+    }
+}
+
 // Fonction pour lancer une tâche et gérer le polling
 function launchTaskAndPoll(taskEndpoint, taskData, element, originalText, taskName = "Tâche") {
     // Changer l'état de l'élément pour indiquer le lancement
@@ -220,5 +234,6 @@ export {
     getCookie,
     pollUploadStatus,
     pollTaskStatus,
-    launchTaskAndPoll
+    launchTaskAndPoll,
+    fetchTaskStatus
 }; 

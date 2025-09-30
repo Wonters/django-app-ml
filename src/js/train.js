@@ -1,7 +1,7 @@
 let launchButton = document.getElementById("launch")
 let progress = document.getElementById("progress")
 
-import { fetchTaskStatus } from "./main.js"
+import { fetchTaskStatus } from "./task.js"
 
 async function fetchApi() {
     const response = await fetch(progress.dataset.url, {

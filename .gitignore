@@ -3,3 +3,12 @@ locale
 models
 .DS_Store
 static/
+src/node_modules
+.npm-cache/
+.DS_Store
+.pytest_cache/
+.coverage
+coverage.xml
+.coverage.*
+.tox/
+*.egg-info/

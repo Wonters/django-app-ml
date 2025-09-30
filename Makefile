@@ -1,5 +1,7 @@
 # Makefile pour django-app-ml
 
+NODE_MODULES_PATH = ../../bundles/node_modules
+
 .PHONY: help install dev build clean
 
 help: ## Afficher l'aide
@@ -12,6 +14,11 @@ help: ## Afficher l'aide
 install: ## Installer les dépendances
 	@echo "📦 Installing dependencies for django-app-ml..."
 	cd src && npm install
+	mkdir -p $(NODE_MODULES_PATH)
+	@echo "📁 Moving node_modules to $(NODE_MODULES_PATH)..."
+	cd src && cp -r node_modules/* $(NODE_MODULES_PATH)/ && rm -rf node_modules
+	@echo "🔗 Creating symlink to shared node_modules..."
+	cd src && ln -sf ../../bundles/node_modules node_modules
 
 dev: ## Lancer le serveur de développement
 	@echo "🚀 Starting development server for django-app-ml..."

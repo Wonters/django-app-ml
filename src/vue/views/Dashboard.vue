@@ -30,7 +30,7 @@
         <el-card class="metric-card">
           <div class="metric-content">
             <div class="metric-icon">
-              <el-icon><Experiment /></el-icon>
+              <el-icon><Tools /></el-icon>
             </div>
             <div class="metric-info">
               <h3>{{ metrics.totalExperiments }}</h3>
@@ -136,14 +136,14 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import { DataAnalysis, Experiment, TrendCharts, Clock } from '@element-plus/icons-vue'
+import { DataAnalysis, Tools, TrendCharts, Clock } from '@element-plus/icons-vue'
 import Chart from 'chart.js/auto'
 
 export default {
   name: 'Dashboard',
   components: {
     DataAnalysis,
-    Experiment,
+    Tools,
     TrendCharts,
     Clock
   },
