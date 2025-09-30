@@ -1,10 +1,10 @@
 from django import forms
-from .models import DataSet, IAModel
+from .models import DataSet, IAModel, Bucket
 
 class DatasetForm(forms.ModelForm):
     class Meta:
         model = DataSet
-        fields = ['name', 'description', 'link']
+        fields = ['name', 'description', 'link', 'bucket']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -14,6 +14,10 @@ class DatasetForm(forms.ModelForm):
         self.fields['name'].widget = forms.TextInput(attrs={"class": "form-control", "placeholder": "Nom du dataset"})
         self.fields['description'].widget = forms.Textarea(attrs={"class": "form-control", "placeholder": "Description du dataset"})
         self.fields['link'].widget = forms.TextInput(attrs={"class": "form-control", "placeholder": "URL du dataset"})
+        self.fields['bucket'].widget = forms.Select(attrs={"class": "form-control"})
+        self.fields['bucket'].queryset = Bucket.objects.all()
+        self.fields['bucket'].required = False
+        self.fields['bucket'].empty_label = "Sélectionner un bucket (optionnel)"
 
 class ModelIAForm(forms.ModelForm):
     class Meta:

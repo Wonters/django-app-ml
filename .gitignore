@@ -2,3 +2,4 @@ __pycache__
 locale
 models
 .DS_Store
+static/

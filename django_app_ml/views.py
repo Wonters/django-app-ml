@@ -7,11 +7,16 @@ including data visualization, model training, prediction, and task management.
 
 import base64
 import io
+import zipfile
 from itertools import chain
 import pandas as pd
 from matplotlib import pyplot as plt
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
+import requests
+import tempfile
+import os
+from pathlib import Path
 
 from django.conf import settings
 from django.http import (
@@ -40,7 +45,7 @@ from core.settings import MODEL_PATH
 from home.models import Project
 
 from .mixins import ParquetQuerySetMixin, TaskViewMixin
-from .models import DataSet, IAModel, ParquetBase, Bucket
+from .models import DataSet, IAModel, ParquetBase, Bucket, MLFlowTemplate, IARecommandation
 from .renderer import CustomScoringAppTemplateRenderer
 from .serializer import (
     DatasetSerializer,
@@ -49,7 +54,7 @@ from .serializer import (
     BucketSerializer,
 )
 from .task_utils import TaskResultManager
-from .tasks import predict_task, train_task, audit_dataset_task, analyse_ia_task
+from .tasks import predict_task, train_task, audit_dataset_task, analyse_ia_task, upload_dataset_task, generate_mlflow_template_task
 from .forms import DatasetForm, ModelIAForm
 from .logging import get_logger
 from .exceptions import (
@@ -58,6 +63,7 @@ from .exceptions import (
     DatasetAccessError,
     DatasetValidationError,
 )
+from .schema.task import TaskResult
 
 # Configure logger for this module
 logger = get_logger(__name__)
@@ -118,60 +124,9 @@ class DatasetAnalysisView(TemplateView, ParquetQuerySetMixin):
         return context
 
 
-class TrainView(ShiftTemplateView, ParquetQuerySetMixin):
-    """
-    View for launching model training tasks.
-    Handles training of scoring models using XGBoost with checkpoint functionality.
-    """
-
-    template_name = "scoring_app/train.html"
-    queryset = ParquetBase.objects.all()
-    serializer_class = DatasetSerializer
-    js_file = "django-app-ml/static/ml_app/js/train.js"
-    checkpoint = str(MODEL_PATH / "xgboost_checkpoint.model")
-
-    def post(self, request):
-        """
-        Launch a training task for the scoring model.
-
-        Returns:
-            JSON response with task status and detail URL
-        """
-        logger.info(f"Train dataset: {self.queryset.file.path}")
-        task = train_task.send_with_options(
-            kwargs={
-                "dataset_path": self.queryset.file.path,
-                "checkpoint": self.checkpoint,
-            }
-        )
-        return JsonResponse(
-            data={
-                "message": "train running",
-                "url": reverse(
-                    "django_app_ml:task-detail", kwargs={"id": task.message_id}
-                ),
-            }
-        )
-
-    def get_context_data(self, **kwargs):
-        """
-        Add active training tasks to context.
-
-        Returns:
-            Context dictionary with enqueued and running tasks
-        """
-        context = super().get_context_data(**kwargs)
-        context["tasks"] = Task.tasks.filter(
-            queue_name="train", status__in=[Task.STATUS_ENQUEUED, Task.STATUS_RUNNING]
-        )
-        return context
-
-
 class PredictView(ScoringAppBaseView):
     """
-    View for launching loan prediction tasks.
-
-    Handles prediction of loan targets for new clients using trained models.
+    View to test the prediction of a model after deployment.
     """
 
     serializer_class = IAModelSerializer
@@ -243,6 +198,7 @@ class MainAppView(ShiftTemplateView):
         context["page_title"] = "ML Platform - plugin Django"
         context["datasets"] = DataSet.objects.all()
         context["models"] = IAModel.objects.all()
+        context["buckets"] = Bucket.objects.all()
         return context
 
 
@@ -294,38 +250,65 @@ class DatasetCreateFormView(CreateView):
     success_url = reverse_lazy("django_app_ml:main")
 
 
-class MLFlowTemplateDownloadView(APIView):
+class MLFlowTemplateDownloadView(TaskViewMixin, APIView):
     """
-    View for downloading the MLFlow template.
+    Vue pour générer ou télécharger un template MLflow personnalisé selon le type de modèle.
+    POST : génère ou récupère le template (lance la tâche LLM si besoin)
+    GET :
+      - avec ?task_id=... : statut de génération
+      - avec /<template_id>/ : téléchargement du template
     """
+    queue_name = "mlflow_template"
 
-    def generate_mlflow_script(self, dataset: DataSet):
-        context = {
-            "dataset": {
-                "id": dataset.id,
-                "name": dataset.name,
-                "version": dataset.version,
-                "path": dataset.bucket.endpoint,
-                "target_column": "none",
-                "source": "s3",
+    def post(self, request):
+        dataset_id = request.data.get("dataset_id")
+        recommendation_id = request.data.get("recommendation_id")
+        model_type = request.data.get("model_type")
+        if not (dataset_id and recommendation_id and model_type):
+            return Response({"error": "dataset_id, recommendation_id et model_type sont requis"}, status=400)
+
+        # Vérifier si un template existe déjà
+        template_qs = MLFlowTemplate.objects.filter(
+            recommendation_id=recommendation_id,
+            model_type=model_type
+        )
+        if template_qs.exists():
+            template = template_qs.first()
+            return Response({
+                "status": "ready",
+                "template_id": template.id,
+                "download_url": reverse("django_app_ml:mlflow-template-download", args=[template.id])
+            })
+
+        # Sinon, lancer la tâche via launch_task du mixin
+        return self.launch_task(
+            task_func=generate_mlflow_template_task,
+            task_kwargs={
+                "recommendation_id": recommendation_id,
+                "model_type": model_type,
+                "dataset_id": dataset_id
             },
-            "experiment_name": f"{dataset.name}_exp",
-        }
-
-        script_content = render_to_string("mlflow/train_template.py.j2", context)
-
-        response = HttpResponse(script_content, content_type="text/x-python")
-        response["Content-Disposition"] = (
-            f"attachment; filename=train_{dataset.name}.py"
+            success_message="Génération du template MLflow lancée",
+            error_message="Erreur lors du lancement de la génération du template MLflow"
         )
-        return response
 
-    def get(self, request, dataset_id):
-        self.object = DataSet.objects.get(id=dataset_id)
-        logger.info(
-            f"Generate MLFlow script for dataset {self.object.name} - {self.object.bucket}"
-        )
-        return self.generate_mlflow_script(self.object)
+    def get(self, request, template_id=None):
+        # Si ?task_id=... : polling du statut
+        task_id = request.GET.get("task_id")
+        if task_id:
+            return self.get_task_status(task_id, task_name="Génération du template MLflow")
+        # Sinon, téléchargement du template généré
+        if template_id is not None:
+            try:
+                template = MLFlowTemplate.objects.get(id=template_id)
+                if not template.file:
+                    return Response({"error": "Le template n'est pas encore prêt."}, status=404)
+                response = HttpResponse(template.file, content_type="text/x-python")
+                response["Content-Disposition"] = f"attachment; filename=mlflow_template_{template.model_type}_{template.id}.py"
+                return response
+            except MLFlowTemplate.DoesNotExist:
+                return Response({"error": "Template MLflow introuvable."}, status=404)
+        return Response({"error": "template_id requis pour le téléchargement."}, status=400)
 
 
 class DatasetAnalysisDetailView(ShiftTemplateView):
@@ -334,7 +317,7 @@ class DatasetAnalysisDetailView(ShiftTemplateView):
     """
 
     template_name = "django_app_ml/dataset_analysis.html"
-    js_file = "django-app-ml/static/js/dataset_analysis.js"
+    js_file = "django-app-ml/static/js/dataset_analysis/main.js"
 
     def get_context_data(self, **kwargs):
         """
@@ -505,54 +488,112 @@ class DatasetModelViewSet(ModelViewSet):
         return DataSet.objects.all()
 
 
-class DatasetDownloadView(APIView):
+class DatasetDownloadView(APIView, TaskViewMixin):
     """
-    API view for downloading dataset data.
+    API view for downloading dataset to S3 bucket or local ZIP file.
     """
+    queue_name = "upload"
+
+    def download_dataset_as_zip(self, dataset):
+        """
+        Download dataset from URL and create a ZIP file directly during streaming.
+        
+        Args:
+            dataset: DataSet instance
+            
+        Returns:
+            tuple: (success: bool, zip_content: bytes or None, filename: str or None, error: str or None)
+        """
+        try:
+            # Download the file from URL
+            response = requests.get(dataset.link, stream=True)
+            response.raise_for_status()
+            
+            # Create ZIP file in memory
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Stream the content directly to the ZIP
+                file_content = b''
+                for chunk in response.iter_content(chunk_size=8192):
+                    file_content += chunk
+                
+                # Add the file to the ZIP
+                zipf.writestr(f"{dataset.name}.zip", file_content)
+            
+            # Get the ZIP content
+            zip_buffer.seek(0)
+            zip_content = zip_buffer.getvalue()
+            
+            # Generate ZIP filename
+            zip_filename = f"{dataset.name}_v{dataset.version}.zip"
+            
+            return True, zip_content, zip_filename, None
+                
+        except requests.RequestException as e:
+            logger.error(f"Error downloading dataset from {dataset.link}: {e}")
+            return False, None, None, f"Erreur lors du téléchargement: {str(e)}"
+        except Exception as e:
+            logger.error(f"Error creating ZIP file for dataset {dataset.name}: {e}")
+            return False, None, None, f"Erreur lors de la création du ZIP: {str(e)}"
 
     def get(self, request, dataset_id):
         """
-        Download dataset data as CSV.
+        Download dataset from URL to S3 bucket or as local ZIP file.
 
         Args:
             dataset_id: ID of the dataset
 
         Returns:
-            CSV file response
+            JSON response indicating success or failure, or ZIP file download
         """
+        # Check if this is a status check request
+        task_id = request.GET.get("task_id")
+        if task_id:
+            return self.get_task_status(task_id, "Upload de dataset")
+        
         try:
             dataset = DataSet.objects.get(id=dataset_id)
-
-            # Ici vous pouvez ajouter la logique pour récupérer les données du dataset
-            # Pour l'instant, on retourne un fichier CSV vide avec les métadonnées
-            import csv
-            from io import StringIO
-
-            output = StringIO()
-            writer = csv.writer(output)
-            writer.writerow(["Dataset ID", "Nom", "Source", "Status"])
-            writer.writerow(
-                [
-                    dataset.id,
-                    dataset.name,
-                    dataset.source,
-                    (
-                        "Déployé"
-                        if IAModel.objects.filter(dataset=dataset).exists()
-                        else "Non déployé"
-                    ),
-                ]
-            )
-
-            response = HttpResponse(output.getvalue(), content_type="text/csv")
-            response["Content-Disposition"] = (
-                f'attachment; filename="dataset_{dataset_id}.csv"'
-            )
-
-            return response
+            # Check if dataset has a bucket configured
+            if dataset.bucket:
+                # Check if dataset already exists in S3
+                if dataset.downloaded:
+                    return Response(
+                        {"message": "Dataset déjà présent dans le bucket S3", "status": "already_exists"},
+                        status=status.HTTP_200_OK
+                    )
+                
+                # Launch upload task instead of direct upload
+                return self.launch_task(
+                    task_func=upload_dataset_task,
+                    task_kwargs={"dataset_id": dataset_id},
+                    success_message="Tâche d'upload lancée avec succès",
+                    error_message="Erreur lors du lancement de la tâche d'upload"
+                )
+            else:
+                # No bucket configured, download as ZIP file
+                success, zip_content, filename, error = self.download_dataset_as_zip(dataset)
+                
+                if success:
+                    # Return ZIP file as download
+                    response = HttpResponse(zip_content, content_type='application/zip')
+                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                    return response
+                else:
+                    return Response(
+                        {"error": error},  # error contains error message here
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                
         except DataSet.DoesNotExist:
             return Response(
                 {"error": "Dataset non trouvé"}, status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error in dataset download: {e}")
+            return Response(
+                {"error": f"Erreur inattendue: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
@@ -660,11 +701,7 @@ class AuditDatasetView(APIView, TaskViewMixin):
                 status="completed",
                 message="Audit terminé avec succès",
                 task_id=None,
-                result={
-                    "error": False,
-                    "results": dataset.reports.first().report,
-                    "message": "Audit terminé avec succès",
-                },
+                result=TaskResult(error=False, results=dataset.reports.first().report, message="Audit terminé avec succès").dict(),
             )
         else:
             return self._format_task_response(
@@ -723,11 +760,7 @@ class AnalyseIAView(APIView, TaskViewMixin):
                 status="completed",
                 message="Analyse IA terminée avec succès",
                 task_id=None,
-                result={
-                    "error": False,
-                    "results": dataset.recommendations.first().recommendation,
-                    "message": "Analyse IA terminée avec succès",
-                },
+                result=TaskResult(error=False, results=dataset.recommendations.first().recommendation, message="Analyse IA terminée avec succès").dict(),
             )
         else:
             return self._format_task_response(

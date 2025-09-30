@@ -309,6 +309,10 @@
 {% endblock %}
 
 {% block extra-js %}
+<script>
+  window.datasetId = "{{ dataset.id }}";
+  window.recommendationId = "{{ dataset.recommendations.last.id|default:'' }}";
+</script>
 <script type="module" src="http://localhost:3000/@vite/client"></script>
 <script type="module" src="{% static 'js/dataset_analysis/main.js' %}"></script>
 {% endblock %} 

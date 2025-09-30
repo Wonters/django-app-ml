@@ -69,6 +69,7 @@ class TaskViewMixin:
     - launch_task: Launch a task with given parameters
     - get_task_status: Get the status of a task
     """
+    queue_name = "default"
     
     def _format_task_response(
         self, status, message, task_id, error=None, result=None, http_status=200
@@ -174,6 +175,9 @@ class TaskViewMixin:
                                 or result.get("failed")
                                 or "Erreur inconnue"
                             )
+                            # Force le status de la tâche à failed en base
+                            task.status = Task.STATUS_FAILED
+                            task.save(update_fields=["status"])
                             return self._format_task_response(
                                 status="failed",
                                 message=f"{task_name} terminée avec des erreurs",

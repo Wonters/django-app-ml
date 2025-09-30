@@ -4,6 +4,7 @@ from rest_framework.serializers import (ModelSerializer,
                                         SerializerMethodField,
                                         HyperlinkedRelatedField,
                                         CharField,
+                                        PrimaryKeyRelatedField,
                                         )
 from rest_framework.fields import FileField
 from django.urls import reverse
@@ -29,7 +30,14 @@ class DatasetSerializer(ModelSerializer):
         lookup_field='id',
         read_only=True
     )
-    link = CharField(validators=[validate_url_or_s3])
+    bucket_id = PrimaryKeyRelatedField(
+        source='bucket',
+        queryset=Bucket.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=False  # Changé de True à False pour afficher dans l'interface
+    )
+    link = CharField(validators=[validate_url_or_s3], required=False, allow_null=True)
     
     class Meta:
         model = DataSet

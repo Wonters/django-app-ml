@@ -3,6 +3,8 @@
  * Gestion des tâches et fonctions utilitaires
  */
 
+import { getCookie, pollTaskStatus, launchTaskAndPoll } from '../task.js';
+
 /**
  * Handle standardized API responses
  * @param {Object} data - Response data with standardized format
@@ -181,75 +183,121 @@ export function pollAnalysisStatus(type, config, datasetId, taskId, onComplete, 
     }
     
     const analysisUrl = launchButton.getAttribute('data-url');
-    const statusUrl = `${analysisUrl}?task_id=${taskId}`;
+    const taskName = type === 'ia' ? 'Analyse IA' : 'Audit de dataset';
+    const originalText = launchButton.innerHTML;
     
-    const pollInterval = setInterval(() => {
-        fetch(statusUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/json',
-            },
-        })
-        .then(response => response.json())
-        .then(data => {
-            const response = handleStandardizedResponse(data);
+    // Utiliser la fonction générique pollTaskStatus du module task.js
+    // Nous devons adapter les callbacks pour être compatibles avec l'interface existante
+    const adaptedPollTaskStatus = (taskId, endpoint, element, originalText, taskName) => {
+        const maxAttempts = 60;
+        let attempts = 0;
+        
+        const checkStatus = () => {
+            attempts++;
             
-            if (response.isValid) {
-                if (response.status === 'completed') {
-                    clearInterval(pollInterval);
-                    onComplete(response.result);
-                } else if (response.status === 'failed') {
-                    clearInterval(pollInterval);
-                    let errorMessage = response.error || response.message || `L'analyse a échoué`;
-                    let errorDetails = null;
-                    
-                    if (response.result) {
-                        errorDetails = response.result;
-                        if (response.result.error) {
-                            errorMessage = response.result.error;
-                        } else if (response.result.detail) {
-                            errorMessage = response.result.detail;
-                        } else if (response.result.message) {
-                            errorMessage = response.result.message;
+            fetch(`${endpoint}?task_id=${taskId}`, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie("csrftoken"),
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const response = handleStandardizedResponse(data);
+                
+                if (response.isValid) {
+                    if (response.status === 'pending') {
+                        if (element) {
+                            element.innerHTML = '<i class="fas fa-clock"></i> En attente...';
                         }
+                        if (attempts < maxAttempts) {
+                            setTimeout(checkStatus, 2000);
+                        } else {
+                            onError('Timeout: La tâche prend trop de temps', null, null);
+                            if (element && originalText) {
+                                element.innerHTML = originalText;
+                                element.style.pointerEvents = 'auto';
+                            }
+                        }
+                    } else if (response.status === 'running') {
+                        if (element) {
+                            element.innerHTML = '<i class="fas fa-spinner fa-spin"></i> En cours...';
+                        }
+                        if (attempts < maxAttempts) {
+                            setTimeout(checkStatus, 2000);
+                        } else {
+                            onError('Timeout: La tâche prend trop de temps', null, null);
+                            if (element && originalText) {
+                                element.innerHTML = originalText;
+                                element.style.pointerEvents = 'auto';
+                            }
+                        }
+                    } else if (response.status === 'completed') {
+                        if (element) {
+                            element.innerHTML = '<i class="fas fa-check"></i> Terminé';
+                        }
+                        onComplete(response.result);
+                    } else if (response.status === 'failed') {
+                        if (element && originalText) {
+                            element.innerHTML = originalText;
+                            element.style.pointerEvents = 'auto';
+                        }
+                        let errorMessage = response.error || response.message || `L'analyse a échoué`;
+                        let errorDetails = null;
+                        
+                        if (response.result) {
+                            errorDetails = response.result;
+                            if (response.result.error) {
+                                errorMessage = response.result.error;
+                            } else if (response.result.detail) {
+                                errorMessage = response.result.detail;
+                            } else if (response.result.message) {
+                                errorMessage = response.result.message;
+                            }
+                        }
+                        
+                        onError(errorMessage, errorDetails, {
+                            task_id: response.task_id,
+                            status: response.status,
+                            message: response.message
+                        });
+                    } else {
+                        if (element && originalText) {
+                            element.innerHTML = originalText;
+                            element.style.pointerEvents = 'auto';
+                        }
+                        onError(`Statut inconnu: ${response.status}`, null, {
+                            task_id: response.task_id,
+                            status: response.status
+                        });
                     }
-                    
-                    onError(errorMessage, errorDetails, {
-                        task_id: response.task_id,
-                        status: response.status,
-                        message: response.message
-                    });
-                } else if (response.status === 'running' || response.status === 'pending') {
-                    // Task is running, continue polling
-                    console.log(`${type} analysis is running...`);
-                } else if (response.status === 'unknown') {
-                    clearInterval(pollInterval);
-                    onError(response.message || 'Statut de tâche inconnu', null, {
-                        task_id: response.task_id,
-                        status: response.status
-                    });
                 } else {
-                    clearInterval(pollInterval);
-                    onError(`Statut de tâche inattendu: ${response.status}`, null, {
+                    if (element && originalText) {
+                        element.innerHTML = originalText;
+                        element.style.pointerEvents = 'auto';
+                    }
+                    onError(response.error || `Statut de tâche inattendu`, null, {
                         task_id: response.task_id,
                         status: response.status
                     });
                 }
-            } else {
-                clearInterval(pollInterval);
-                onError(response.error || `Statut de tâche inattendu: ${response.status}`, null, {
-                    task_id: response.task_id,
-                    status: response.status
-                });
-            }
-        })
-        .catch(error => {
-            console.error(`Error polling ${type} analysis status:`, error);
-            clearInterval(pollInterval);
-            onError('Erreur lors de la vérification du statut', null, null);
-        });
-    }, 2000);
+            })
+            .catch(error => {
+                console.error(`Erreur lors de la vérification du statut:`, error);
+                if (element && originalText) {
+                    element.innerHTML = originalText;
+                    element.style.pointerEvents = 'auto';
+                }
+                onError('Erreur lors de la vérification du statut', null, null);
+            });
+        };
+        
+        checkStatus();
+    };
+    
+    // Démarrer le polling adapté
+    adaptedPollTaskStatus(taskId, analysisUrl, launchButton, originalText, taskName);
 }
 
 /**
@@ -358,24 +406,6 @@ export function checkExistingAnalysisStatus(analysisUrl, onComplete, onError, on
         console.error('Error checking existing analysis status:', error);
         onUnknown();
     });
-}
-
-/**
- * Get CSRF token from cookies
- */
-export function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
 }
 
 /**

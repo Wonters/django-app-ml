@@ -349,7 +349,7 @@ function showIAAnalysisResults(results) {
 function generateDynamicCard(data, title, index) {
     const cardId = `ia-card-${index}`;
     let cardContent = '';
-    
+
     if (Array.isArray(data)) {
         // Traitement des listes
         if (data.length === 0) {
@@ -383,19 +383,32 @@ function generateDynamicCard(data, title, index) {
             cardContent = objectEntries.map(([key, value], keyIndex) => {
                 const subTitle = formatKeyName(key);
                 const subIndex = `${index}-${keyIndex}`;
-                
+
+                if (key === 'type_models' && Array.isArray(value)) {
+                    // Affichage spécial : chaque type de modèle avec bouton à côté
+                    return `<div class="mb-3">
+                        <h6 class="text-primary">${escapeHtml(subTitle)}</h6>
+                        ${value.map((modelType, modelIdx) => {
+                            const btnId = `mlflow-btn-${subIndex}-${modelType.replace(/[^a-zA-Z0-9]/g, '')}`;
+                            return `<p class="mb-1 ms-3 d-flex align-items-center">
+                                <i class="fas fa-arrow-right text-secondary me-2"></i> <span>${escapeHtml(String(modelType))}</span>
+                                <button class="btn btn-outline-primary btn-sm ms-3" id="${btnId}" type="button">
+                                    <i class="fas fa-download"></i> Template MLflow
+                                </button>
+                            </p>`;
+                        }).join('')}
+                    </div>`;
+                }
+                // Récursion pour objets imbriqués
                 if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    // Récursion pour les objets imbriqués
                     return generateDynamicCard(value, subTitle, subIndex);
                 } else if (Array.isArray(value)) {
-                    // Traitement des listes
                     if (value.length === 0) {
                         return `<div class="mb-3">
                             <h6 class="text-primary">${escapeHtml(subTitle)}</h6>
                             <p class="text-muted ms-3">Aucune donnée</p>
                         </div>`;
                     } else if (typeof value[0] === 'object' && value[0] !== null) {
-                        // Liste d'objets - récursion pour chaque élément
                         return `<div class="mb-3">
                             <h6 class="text-primary">${escapeHtml(subTitle)}</h6>
                             <div class="ms-3">
@@ -404,8 +417,8 @@ function generateDynamicCard(data, title, index) {
                                 ).join('')}
                             </div>
                         </div>`;
-                    } else {
-                        // Liste de valeurs simples
+                    } else if (key !== 'type_models') {
+                        // Liste de valeurs simples (hors type_models)
                         return `<div class="mb-3">
                             <h6 class="text-primary">${escapeHtml(subTitle)}</h6>
                             ${value.map(item => 
@@ -426,8 +439,9 @@ function generateDynamicCard(data, title, index) {
         // Traitement des valeurs simples
         cardContent = `<p class="mb-2">${escapeHtml(String(data))}</p>`;
     }
-    
-    return `
+
+    // Construction de la card
+    const cardHtml = `
         <div class="row mt-3">
             <div class="col-12">
                 <div class="card" id="${cardId}">
@@ -443,6 +457,23 @@ function generateDynamicCard(data, title, index) {
             </div>
         </div>
     `;
+
+    // Après l'injection, on attache les listeners pour les boutons MLflow
+    setTimeout(() => {
+        if (typeof data === 'object' && data !== null && Array.isArray(data.type_models)) {
+            const datasetId = window.datasetId || document.getElementById('launch-ia-analysis-tab-btn')?.getAttribute('data-dataset-id');
+            const recommendationId = window.recommendationId || (window.latestRecommendationId || null); // à ajuster selon ton flux
+            data.type_models.forEach((modelType, modelIdx) => {
+                const btnId = `mlflow-btn-${index}-0-${modelType.replace(/[^a-zA-Z0-9]/g, '')}`;
+                const btn = document.getElementById(btnId) || document.querySelector(`#mlflow-btn-${index}-${modelType.replace(/[^a-zA-Z0-9]/g, '')}`);
+                if (btn) {
+                    btn.addEventListener('click', () => handleMLflowTemplateDownload(modelType, datasetId, recommendationId, btn));
+                }
+            });
+        }
+    }, 0);
+
+    return cardHtml;
 }
 
 /**
@@ -533,3 +564,102 @@ function formatDuration(seconds) {
         return hours + 'h ' + minutes + 'm';
     }
 } 
+
+// Ajout : gestion du téléchargement/génération du template MLflow
+async function handleMLflowTemplateDownload(modelType, datasetId, recommendationId, btn) {
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
+    try {
+        // Appel POST à l'API
+        const resp = await fetch('/mlflow-template/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrftoken || '' },
+            body: JSON.stringify({
+                dataset_id: datasetId,
+                recommendation_id: recommendationId,
+                model_type: modelType
+            })
+        });
+        const data = await resp.json();
+        if (data.status === 'ready' && data.download_url) {
+            // Template déjà prêt, téléchargement direct
+            window.open(data.download_url, '_blank');
+            btn.innerHTML = '<i class="fas fa-download"></i> Télécharger le template';
+            btn.disabled = false;
+        } else if (data.status === 'pending' || data.status === 'generating' || data.task_id) {
+            // Polling du statut
+            await pollMLflowTemplateStatus(data.task_id, btn, modelType);
+        } else {
+            btn.innerHTML = original;
+            btn.disabled = false;
+            alert(data.error || 'Erreur lors de la génération du template.');
+        }
+    } catch (e) {
+        btn.innerHTML = original;
+        btn.disabled = false;
+        alert('Erreur lors de la génération du template.');
+    }
+}
+
+async function pollMLflowTemplateStatus(taskId, btn, modelType) {
+    let tries = 0;
+    const maxTries = 30;
+    const poll = async () => {
+        tries++;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération... (' + tries + ')';
+        const resp = await fetch(`/mlflow-template/?task_id=${taskId}`);
+        const data = await resp.json();
+        if (data.status === 'completed' && data.result && data.result.template_id) {
+            // Téléchargement du template
+            const downloadUrl = `/mlflow-template/${data.result.template_id}/`;
+            window.open(downloadUrl, '_blank');
+            btn.innerHTML = '<i class="fas fa-download"></i> Télécharger le template';
+            btn.disabled = false;
+        } else if (data.status === 'failed') {
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erreur';
+            btn.disabled = false;
+            alert(data.error || 'Erreur lors de la génération du template.');
+        } else if (tries < maxTries) {
+            setTimeout(poll, 2000);
+        } else {
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Timeout';
+            btn.disabled = false;
+            alert('Timeout lors de la génération du template.');
+        }
+    };
+    poll();
+}
+
+// Patch de generateDynamicCard pour injecter les boutons MLflow
+const OLD_generateDynamicCard = generateDynamicCard;
+generateDynamicCard = function(data, title, index) {
+    let cardHtml = OLD_generateDynamicCard(data, title, index);
+    // Si data est un objet avec type_models, on ajoute les boutons
+    if (data && typeof data === 'object' && Array.isArray(data.type_models) && data.type_models.length > 0) {
+        // On suppose que datasetId et recommendationId sont accessibles globalement ou via attributs data-
+        const datasetId = window.datasetId || document.getElementById('launch-ia-analysis-tab-btn')?.getAttribute('data-dataset-id');
+        const recommendationId = window.recommendationId || (window.latestRecommendationId || null); // à ajuster selon ton flux
+        let btns = '<div class="mt-3">';
+        data.type_models.forEach(modelType => {
+            const btnId = `mlflow-btn-${index}-${modelType.replace(/[^a-zA-Z0-9]/g, '')}`;
+            btns += `<button class="btn btn-outline-primary btn-sm ms-2" id="${btnId}" type="button">
+                <i class="fas fa-download"></i> Template MLflow : ${modelType}
+            </button>`;
+        });
+        btns += '</div>';
+        // Ajoute les boutons juste avant la fin de la card
+        cardHtml = cardHtml.replace('</div>\n    </div>\n</div>\n', btns + '</div>\n    </div>\n</div>\n');
+        // Après l'injection, on attache les listeners
+        setTimeout(() => {
+            data.type_models.forEach(modelType => {
+                const btnId = `mlflow-btn-${index}-${modelType.replace(/[^a-zA-Z0-9]/g, '')}`;
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', () => handleMLflowTemplateDownload(modelType, datasetId, recommendationId, btn));
+                }
+            });
+        }, 0);
+    }
+    return cardHtml;
+}; 

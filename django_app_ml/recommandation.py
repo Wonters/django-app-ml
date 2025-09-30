@@ -18,20 +18,18 @@ if not hasattr(settings, 'OPENAI_API_KEY') or not settings.OPENAI_API_KEY:
     logger.warning("OPENAI_API_KEY n'est pas configurée dans les settings Django")
 
 
-@dataclass
-class Application:
+# Remplacement de la dataclass Application par un modèle Pydantic
+class Application(BaseModel):
     """Structure pour une application IA"""
-
     type_application: str = Field(
         description="Type d'application (classification, prédiction, segmentation d'image, génération d'image, etc...)"
     )
     descriptif_court: str = Field(description="Description courte de l'application")
 
 
-@dataclass
-class Recommendation:
+# Remplacement de la dataclass Recommendation par un modèle Pydantic
+class Recommendation(BaseModel):
     """Structure pour une recommandation IA"""
-
     descriptif: str = Field(
         description="Description détaillée de l'utilisation possible"
     )

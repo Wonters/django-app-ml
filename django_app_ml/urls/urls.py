@@ -3,7 +3,6 @@ from ..views import (
     MarimoView,
     TaskViewSet,
     PredictView,
-    TrainView,
     DatasetDownloadView,
     DatasetModelViewSet,
     MainAppView,
@@ -34,7 +33,6 @@ urlpatterns = [
     path("", MainAppView.as_view(), name="main"),
     path("notebooks/<str:notebook>", MarimoView.as_view(), name="marimo-view"),
     path("predict/", PredictView.as_view(), name="predict"),
-    path("train/", TrainView.as_view(), name="train"),
     path("api/", include(router.urls)),
     path(
         "api/datasets/<int:dataset_id>/download/",

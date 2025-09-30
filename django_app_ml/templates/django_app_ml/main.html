@@ -17,7 +17,7 @@
                     <th> {% trans "Nom" %}</th>
                     <th> {% trans "Description" %}</th>
                     <th> {% trans "Bucket" %}</th>
-                    <th> {% trans "Déployé" %}</th>
+                    <th> {% trans "Téléchargé" %}</th>
                     <th> {% trans "Actions" %}</th>
                 </tr>
             </thead>
@@ -25,21 +25,67 @@
                 {% for dataset in datasets %}
                 <tr>
                     <td>{{ dataset.name }}</td>
-                    <td>{{ dataset.description|default:"Aucune description" }}</td>
+                    <td>
+                        <span data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="{{ dataset.description|default:'Aucune description' }}">
+                            {{ dataset.description|truncatechars:50|default:"Aucune description" }}
+                        </span>
+                    </td>
                     {% if dataset.bucket %}
-                    <td> <a href="{% url 'django_app_ml:bucket-detail' id=dataset.bucket.id %}">{{ dataset.bucket.bucket_name }}</a></td>
+                    <td> <a href="{% url 'django_app_ml:bucket-detail' id=dataset.bucket.id %}" target="_blank">{{dataset.bucket.bucket_name }}</a></td>
                     {% else %}
-                    <td> <i class="fas fa-exclamation-triangle text-warning"></i> Aucun bucket</td>
+                    <td>
+                        <i class="fas fa-exclamation-triangle text-warning"></i> Aucun bucket
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="modal"
+                            data-bs-target="#selectBucketModal" data-dataset-id="{{ dataset.id }}"
+                            data-dataset-name="{{ dataset.name }}">
+                            <i class="fas fa-plus" data-bs-toggle="tooltip" data-bs-placement="top"
+                                title="Sélectionner un bucket pour le dataset"></i>
+                        </button>
+                    </td>
                     {% endif %}
                     <td>
-                        {% if dataset.iamodels.exists %}
+                        {% if dataset.downloaded %}
                         <span class="badge bg-success">
-                            <i class="fas fa-check-circle"></i> Oui
+                            <i class="fas fa-check-circle"></i> {% trans "Oui" %}
                         </span>
                         {% else %}
-                        <span class="badge bg-warning">
-                            <i class="fas fa-clock"></i> Non
+                        {% if dataset.bucket %}
+                        {% if dataset.last_download_task %}
+                        {% if dataset.last_download_task.status == "failed" %}
+                        <span class="badge bg-primary">
+                            <a href="{% url 'django_app_ml:dataset-download' dataset_id=dataset.id %}"
+                                class="text-white text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="top"
+                                title="{{ dataset.last_download_task.error }}"
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {% trans "Relancer l'upload" %}
+                            </a>
                         </span>
+                        {% elif dataset.last_download_task.status == "pending" or dataset.last_download_task.status ==
+                        "running" %}
+                        <span class="text-warning" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="{{ dataset.last_download_task.message }}">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            {% trans "En cours" %}
+                        </span>
+                        {% elif dataset.last_download_task.status == "done" %}
+                        <span class="text-success">
+                            <i class="fas fa-check-circle"></i>
+                            {% trans "Oui" %}
+                        </span>
+                        {% endif %}
+                        {% else %}
+                        <span class="badge bg-primary">
+                            <a href="{% url 'django_app_ml:dataset-download' dataset_id=dataset.id %}"
+                                class="text-white text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="top"
+                                title="{% if dataset.bucket %}Télécharge le dataset depuis l'URL et l'upload vers le bucket S3 configuré{% else %}Télécharge le dataset depuis l'URL et le sauvegarde en local sous forme de fichier ZIP{% endif %}">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {% trans "Télécharger vers S3" %}
+                            </a>
+                        </span>
+                        {% endif %}
+                        {% endif %}
+
                         {% endif %}
                     </td>
                     <td>
@@ -48,7 +94,8 @@
                                 class="btn btn-success btn-sm">
                                 <i class="fas fa-chart-line"></i> {% trans "Analyse" %}
                             </a>
-                            <a href="{% url 'django_app_ml:dataset-detail' dataset.id %}" target="_blank" class="btn btn-info btn-sm">
+                            <a href="{% url 'django_app_ml:dataset-detail' dataset.id %}" target="_blank"
+                                class="btn btn-info btn-sm">
                                 <i class="fas fa-pencil-alt"></i> {% trans "Modifier" %}
                             </a>
                             <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal"
@@ -70,7 +117,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2><i class="fas fa-brain"></i> {% trans "Modèles d'Intelligence Artificielle" %}</h2>
         </div>
-        
+
         <div class="row" id="models-list">
             {% for model in models %}
             <div class="col-md-6 col-lg-4 mb-4">
@@ -84,8 +131,9 @@
                         <p class="card-text text-muted">{{ model.description|default:"Aucune description" }}</p>
                         <div class="mb-3">
                             <small class="text-muted">
-                                <i class="fas fa-database"></i> {% trans "Dataset" %}: 
-                                <a href="{% url 'django_app_ml:dataset-analysis' dataset_id=model.dataset.id %}" class="text-decoration-none">
+                                <i class="fas fa-database"></i> {% trans "Dataset" %}:
+                                <a href="{% url 'django_app_ml:dataset-analysis' dataset_id=model.dataset.id %}"
+                                    class="text-decoration-none">
                                     {{ model.dataset.name }}
                                 </a>
                             </small>
@@ -134,7 +182,54 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
-                <button type="submit" id="deleteDatasetModalButton" class="btn btn-danger">{% trans "Supprimer" %}</button>
+                <button type="submit" id="deleteDatasetModalButton" class="btn btn-danger">{% trans "Supprimer"
+                    %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de sélection de bucket -->
+<div class="modal fade" id="selectBucketModal" tabindex="-1" aria-labelledby="selectBucketModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="selectBucketModalLabel">Sélectionner un bucket</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sélectionnez un bucket pour le dataset "<span id="datasetNameForBucket"></span>" :</p>
+                <div id="bucketList" class="row">
+                    {% for bucket in buckets %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100 bucket-card" data-bucket-id="{{ bucket.id }}">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-database text-primary"></i> {{ bucket.bucket_name }}
+                                </h6>
+                                <p class="card-text small text-muted">
+                                    <strong>Région:</strong> {{ bucket.region }}<br>
+                                    <strong>Endpoint:</strong> {{ bucket.endpoint }}
+                                </p>
+                            </div>
+                            <div class="card-footer">
+                                <button type="button" class="btn btn-primary btn-sm w-100 select-bucket-btn"
+                                    data-bucket-id="{{ bucket.id }}" data-bucket-name="{{ bucket.bucket_name }}">
+                                    <i class="fas fa-check"></i> Sélectionner
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12">
+                        <p class="text-muted text-center">Aucun bucket disponible</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
             </div>
         </div>
     </div>
@@ -149,20 +244,24 @@
     .dt-buttons {
         margin-bottom: 1rem;
     }
+
     .dt-buttons .btn {
         margin-right: 0.5rem;
         margin-bottom: 0.5rem;
     }
+
     .dt-buttons .btn i {
         margin-right: 0.25rem;
     }
+
     .dataTables_wrapper .dataTables_filter {
         margin-bottom: 1rem;
     }
+
     .table-responsive {
         margin-top: 1rem;
     }
-    
+
     /* Styles pour la pagination Bootstrap */
     .dataTables_wrapper .dataTables_paginate {
         margin-top: 1rem;
@@ -171,7 +270,7 @@
         justify-content: center;
         gap: 0.5rem;
     }
-    
+
     .dataTables_wrapper .dataTables_paginate ul {
         display: flex;
         align-items: center;
@@ -180,7 +279,7 @@
         padding: 0;
         list-style: none;
     }
-    
+
     .dataTables_wrapper .dataTables_paginate .paginate_button {
         padding: 0.375rem 0.75rem;
         border: 1px solid #dee2e6;
@@ -195,38 +294,38 @@
         min-width: 2.5rem;
         height: 2.5rem;
     }
-    
+
     .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
         background-color: #e9ecef;
         border-color: #dee2e6;
         color: #0a58ca !important;
     }
-    
+
     .dataTables_wrapper .dataTables_paginate .paginate_button.current {
         background-color: #0d6efd;
         border-color: #0d6efd;
         color: #fff !important;
     }
-    
+
     .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
         background-color: #0b5ed7;
         border-color: #0a58ca;
         color: #fff !important;
     }
-    
+
     .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
         color: #6c757d !important;
         pointer-events: none;
         background-color: #fff;
         border-color: #dee2e6;
     }
-    
+
     /* Styles pour les boutons de pagination */
     .dataTables_wrapper .dataTables_paginate .paginate_button.previous,
     .dataTables_wrapper .dataTables_paginate .paginate_button.next {
         padding: 0.375rem 0.75rem;
     }
-    
+
     /* Alignement des informations de pagination */
     .dataTables_wrapper .dataTables_info {
         display: flex;
@@ -234,14 +333,14 @@
         justify-content: center;
         margin-top: 1rem;
     }
-    
+
     /* Container principal pour aligner tout sur une ligne */
     .dataTables_wrapper .dataTables_paginate,
     .dataTables_wrapper .dataTables_info {
         display: inline-flex;
         align-items: center;
     }
-    
+
     /* Wrapper pour tout aligner horizontalement */
     .dataTables_wrapper .bottom {
         display: flex;
